@@ -18,12 +18,14 @@ project "mcctp-example"
     includedirs
     {
         ".",
+        "%{IncludeDir.mcctp}",
         "%{IncludeDir.imgui}",
     }
 
     links
     {
         "ImGui",
+        "mcctp",
         "opengl32.lib",
     }
 

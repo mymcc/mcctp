@@ -1,2 +1,12 @@
 .vs/
+
+# Visual Studio Files
+**.sln
+**.vcxproj
+**.vcxproj.user
+**.vcxproj.filters
+
+# Output
+bin/
+bin-int/
 **.ini

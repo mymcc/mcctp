@@ -1,8 +1,9 @@
 -- external.lua
 IncludeDir = {}
+IncludeDir["mcctp"]  = "../include"
 IncludeDir["imgui"]  = "../external/imgui"
 
-LibrarayDir = {}
+LibraryDir = {}
 
 group "external"
    include "external/imgui"
