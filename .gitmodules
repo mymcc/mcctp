@@ -1,0 +1,9 @@
+[submodule "external/imgui"]
+	path = external/imgui
+	url = https://github.com/ocornut/imgui
+	branch = docking
+	ignore = dirty
+[submodule "external/ImageMagick"]
+	path = external/ImageMagick
+	url = https://github.com/ImageMagick/ImageMagick
+	ignore = dirty
