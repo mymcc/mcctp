@@ -10,3 +10,8 @@
 bin/
 bin-int/
 **.ini
+**.log
+
+# Deps
+external/cache/*
+external/7z2201-x64/*
