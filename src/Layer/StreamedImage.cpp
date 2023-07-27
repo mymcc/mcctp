@@ -11,7 +11,8 @@ mcctp::StreamedImage::StreamedImage(std::filesystem::path path)
 void mcctp::StreamedImage::OnAttach()
 {
 	mcctp::Initialize("F:\\SteamLibrary\\steamapps\\common\\Halo The Master Chief Collection\\Data\\ui\\texturepacks");
-	mcctp::MemoryMapTextures();
+	//mcctp::MemoryMapTexturePacks();
+	mcctp::MemoryMapAndIndexTexturePacks();
 }
 
 void mcctp::StreamedImage::OnUpdate(float ts)

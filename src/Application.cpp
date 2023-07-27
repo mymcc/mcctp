@@ -192,7 +192,7 @@ namespace mcctp
 		static std::wstring title = converter().from_bytes(m_Specification.Name);
 		m_hWC = { sizeof(m_hWC), CS_OWNDC, WndProc, 0L, 0L, GetModuleHandle(NULL), NULL, NULL, NULL, NULL, title.c_str(), NULL};
 		::RegisterClassExW(&m_hWC);
-		m_hHWND = ::CreateWindowW(m_hWC.lpszClassName, L"Dear ImGui Win32+OpenGL3 Example", WS_OVERLAPPEDWINDOW, 100, 100, 1280, 800, NULL, NULL, m_hWC.hInstance, NULL);
+		m_hHWND = ::CreateWindowW(m_hWC.lpszClassName, title.c_str(), WS_OVERLAPPEDWINDOW, 100, 100, 1280, 800, NULL, NULL, m_hWC.hInstance, NULL);
 
 		if (!::CreateDeviceWGL(m_hHWND, &g_MainWindow))
 		{
@@ -242,12 +242,6 @@ namespace mcctp
 			platform_io.Renderer_SwapBuffers = Hook_Renderer_SwapBuffers;
 			platform_io.Platform_RenderWindow = Hook_Platform_RenderWindow;
 		}
-		//ImGui::GetIO().ConfigViewportsNoDecoration = false;
-
-		//ImFontConfig fontConfig;
-		//fontConfig.FontDataOwnedByAtlas = false;
-		//ImFont* robotoFont = io.Fonts->AddFontFromMemoryTTF((void*)g_RobotoRegular, sizeof(g_RobotoRegular), 20.0f, &fontConfig);
-		//io.FontDefault = robotoFont;
     }
 	void Application::Shutdown()
 	{
