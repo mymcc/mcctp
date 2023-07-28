@@ -1,6 +1,6 @@
+#include "mcctppch.h"
 #include "Application.h"
 #include "Layer/StreamedImage.h"
-#include "mcctppch.h"
 
 // App Instance
 extern void *g_Instance;

@@ -1,5 +1,5 @@
-#include "StreamedImage.h"
 #include "mcctppch.h"
+#include "StreamedImage.h"
 
 mcctp::StreamedImage::StreamedImage(std::filesystem::path path) {
   std::wstring dst;

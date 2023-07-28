@@ -11,6 +11,8 @@ bin/
 bin-int/
 **.ini
 **.log
+**.bin
+**.idx
 
 # Deps
 external/cache/*
