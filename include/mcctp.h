@@ -72,6 +72,18 @@ public:
       CloseHandle(hFile);
   }
 
+  HANDLE GetFileHandle(void) const {
+      return hFile;
+  }
+
+  HANDLE GetFileMap(void) const {
+      return hMap;
+  }
+
+  LPVOID GetMapView(void) const {
+      return lpMap;
+  }
+
 private:
   bool TryCreateMapping(std::wstring path) {
     hFile = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING,
@@ -140,10 +152,21 @@ static std::unordered_map<TexturePackFlags, const char *> FlagToBasename = {
     {TexturePackFlags::SPMapPreview, "spmappreviewtexturepack"},
 };
 
+enum class TextureResourceFormat {
+    A8R8G8B8 = 0,
+    DXT1,
+    DXT3,
+    DXT5,
+    INVALID,
+};
+
 struct TexturePackResource {
   std::string Name;
   size_t Offset;
   size_t Size;
+  uint32_t Width;
+  uint32_t Height;
+  TextureResourceFormat Format;
 };
 
 typedef std::unordered_map<std::string, TexturePackResource> TexturePackIndex;
@@ -195,6 +218,37 @@ public:
       return false;
     }
   }
+  bool DumpTexturePack(TexturePackFlags flag) {
+      const auto& fm = m_TexturePackFileMap.at(flag);
+      const LPVOID lpMap = fm.GetMapView();
+      const HANDLE hFile = fm.GetFileHandle();
+      char* fptr = static_cast<char*>(lpMap);
+      char* fend = fptr + GetFileSize(hFile, NULL);
+      std::cout << "TexturePackSize: (" << GetFileSize(hFile, NULL) << ")" << std::endl;
+
+      int files = 0;
+      int blocks = 0;
+      int neither = 0;
+      while (fptr < fend) {
+          uint32_t pos = fptr - static_cast<char*>(lpMap);
+          uint32_t blockkey = *(uint32_t*)fptr; fptr += sizeof(uint32_t);
+          int size1 = *(int*)fptr; fptr += sizeof(int);
+          fptr = static_cast<char*>(lpMap) + pos + size1 + 0x10;
+
+          if (blockkey == 0x5E73CDD7) {
+              blocks += 1;
+          }
+          else if (blockkey == 0xCDBFA090) {
+              files += 1;
+          }
+          else {
+              neither += 1;
+          }
+      }
+      std::cout << "TexturePackStats: " << "Files: " << files << " Blocks: " << blocks << " Neither: " << neither << std::endl;
+
+      return true;
+  }
 
 private:
 private:
@@ -234,5 +288,16 @@ static bool MemoryMapAndIndexTexturePacks(void) {
     }
   }
   return true;
+}
+
+static bool DumpTexturePacks() {
+    TexturePackField field = ctx::Instance()->GetField();
+    for (uint8_t i = 0; i < TexturePackCount; ++i) {
+        TexturePackFlags flag = (TexturePackFlags)(1 << i);
+        if (field.HasFlag(flag)) {
+            ctx::Instance()->DumpTexturePack(flag);
+        }
+    }
+    return true;
 }
 } // namespace mcctp
