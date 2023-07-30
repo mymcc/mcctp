@@ -6,3 +6,4 @@
 [submodule "external/fpng"]
 	path = external/fpng
 	url = https://github.com/Stehfyn/fpng
+        ignore = dirty
