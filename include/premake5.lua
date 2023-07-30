@@ -16,16 +16,18 @@ project "mcctp"
     includedirs
     {
         ".",
+        "%{IncludeDir.fpng}",
+
     }
 
     links
     {
-
+        "fpng",
     }
 
     libdirs
     {
-
+        
     }
 
     targetdir ("../bin/" .. outputdir .. "/%{prj.name}")

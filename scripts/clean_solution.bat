@@ -6,6 +6,7 @@ pushd %root%
 
 rem Visual Studio Solution Files
 del /q /f "*.sln"
+rmdir /s /q ".vs"
 
 rem explicit for now
 del /q /f /s "src\*.vcxproj"

@@ -20,6 +20,7 @@ project "mcctp-example"
         ".",
         "%{IncludeDir.mcctp}",
         "%{IncludeDir.imgui}",
+        "%{IncludeDir.fpng}",
     }
 
     links

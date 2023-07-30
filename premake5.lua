@@ -4,7 +4,7 @@ include "external/premake/premake_customization/solution_items.lua"
 workspace "mcctp"
     architecture "x64"
     configurations { "Debug", "Release" }
-    startproject "mcctt"
+    startproject "mcctp-example"
 
     outputdir = "%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}"
 

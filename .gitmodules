@@ -3,7 +3,6 @@
 	url = https://github.com/ocornut/imgui
 	branch = docking
 	ignore = dirty
-[submodule "external/ImageMagick"]
-	path = external/ImageMagick
-	url = https://github.com/ImageMagick/ImageMagick
-	ignore = dirty
+[submodule "external/fpng"]
+	path = external/fpng
+	url = https://github.com/Stehfyn/fpng
