@@ -10,3 +10,4 @@
 [submodule "external/Legacy_DDS_Utilities"]
 	path = external/Legacy_DDS_Utilities
 	url = https://github.com/Stehfyn/Legacy_DDS_Utilities
+        ignore = dirty
