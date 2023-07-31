@@ -394,8 +394,6 @@ public:
           if (std::holds_alternative<TexturePackResource>(entry.second)) {
               const auto& res = std::get<TexturePackResource>(entry.second);
               std::filesystem::path file_path = out_dir / (res.Name + ".dds");
-              //std::ofstream file; // if (!ofs) ...
-              //file.open(file_path, std::ios::binary);
               if (res.Format != TextureResourceFormat::A8R8G8B8) {
                 std::stringstream file;
                 std::vector<unsigned char> buf(124);
@@ -420,7 +418,7 @@ public:
                 size_t data2_size = sizeof(data2) / sizeof(data2[0]);
                                file.write((const char *)data2, data2_size);
 
-                               if (res.Format == TextureResourceFormat::DXT1) {
+                if (res.Format == TextureResourceFormat::DXT1) {
                   unsigned char b = 0x31;
                   file.write(reinterpret_cast<const char *>(&b), sizeof(b));
                 } else if (res.Format == TextureResourceFormat::DXT3) {
@@ -429,12 +427,12 @@ public:
                 } else if (res.Format == TextureResourceFormat::DXT5) {
                   unsigned char b = 0x35;
                   file.write(reinterpret_cast<const char *>(&b), sizeof(b));
-                } // else ...
-                               unsigned char data3[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                                         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                                         0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00,
-                                         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                                         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+                }
+                unsigned char data3[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                            0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00,
+                            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
                 size_t data3_size = sizeof(data3) / sizeof(data3[0]);
                 file.write((const char *)data3, data3_size);
 
