@@ -395,18 +395,17 @@ public:
               const auto& res = std::get<TexturePackResource>(entry.second);
               std::filesystem::path file_path = out_dir / (res.Name + ".dds");
               if (res.Format != TextureResourceFormat::A8R8G8B8) {
-                std::stringstream file;
-                std::vector<unsigned char> buf(124);
+                std::stringstream bytestream;
                 unsigned char data1[] = {0x44, 0x44, 0x53, 0x20, 0x7C, 0x00,
                                         0x00, 0x00, 0x07, 0x10, 0x08, 0x00};
                 size_t data1_size = sizeof(data1) / sizeof(data1[0]);
 
-                file.write((const char *)data1, data1_size);
-                file.write(reinterpret_cast<const char *>(&res.Height), sizeof(res.Height));
-                file.write(reinterpret_cast<const char *>(&res.Width), sizeof(res.Width));
+                bytestream.write((const char *)data1, data1_size);
+                bytestream.write(reinterpret_cast<const char *>(&res.Height), sizeof(res.Height));
+                bytestream.write(reinterpret_cast<const char *>(&res.Width), sizeof(res.Width));
 
                 uint32_t dw = 0x0400;
-                file.write(reinterpret_cast<const char *>(&dw), sizeof(dw));
+                bytestream.write(reinterpret_cast<const char *>(&dw), sizeof(dw));
 
                 unsigned char data2[] = {
                     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -416,25 +415,25 @@ public:
                     0x00, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00,
                     0x44, 0x58, 0x54};
                 size_t data2_size = sizeof(data2) / sizeof(data2[0]);
-                               file.write((const char *)data2, data2_size);
+                bytestream.write((const char *)data2, data2_size);
 
+                unsigned char b = 0x00;
                 if (res.Format == TextureResourceFormat::DXT1) {
-                  unsigned char b = 0x31;
-                  file.write(reinterpret_cast<const char *>(&b), sizeof(b));
+                  b = 0x31;
                 } else if (res.Format == TextureResourceFormat::DXT3) {
-                  unsigned char b = 0x33;
-                  file.write(reinterpret_cast<const char *>(&b), sizeof(b));
+                  b = 0x33;
                 } else if (res.Format == TextureResourceFormat::DXT5) {
-                  unsigned char b = 0x35;
-                  file.write(reinterpret_cast<const char *>(&b), sizeof(b));
+                  b = 0x35;
                 }
+                bytestream.write(reinterpret_cast<const char *>(&b), sizeof(b));
+
                 unsigned char data3[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                             0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00,
                             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
                 size_t data3_size = sizeof(data3) / sizeof(data3[0]);
-                file.write((const char *)data3, data3_size);
+                bytestream.write((const char *)data3, data3_size);
 
                 TexturePackType type = GetType(m_TexturePackFileMap.at(flag));
                 LPVOID lpMap = NULL;
@@ -450,12 +449,14 @@ public:
                 if (allgood) {
                   char *fptr = static_cast<char *>(lpMap);
                   char *start = fptr + res.Offset;
-                  file.write((const char *)start, res.Size);
-                  std::ofstream file2; // if (!ofs) ...
-                  file2.open(file_path, std::ios::binary);
-                  file2.write((const char*)file.str().c_str(), 128 + res.Size);
-                  file2.close();
 
+                  std::ofstream file;
+                  if (file) {
+                    bytestream.write((const char *)start, res.Size);
+                    file.open(file_path, std::ios::binary);
+                    file.write((const char *)bytestream.str().c_str(), 128 + res.Size);
+                    file.close();
+                  }
                 }
               
               } else {
