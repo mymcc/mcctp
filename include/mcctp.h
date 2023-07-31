@@ -328,7 +328,8 @@ public:
 
               char namebytes[0x20];
               std::memcpy(namebytes, fptr, sizeof(namebytes));
-              std::string name = std::string(namebytes).substr(0, strlen(namebytes));
+              size_t length = std::find(namebytes, namebytes + sizeof(namebytes), '\0') - namebytes;
+              std::string name(namebytes, length);
               fptr += sizeof(namebytes);
 
               fptr = static_cast<char *>(lpMap) + start + 0x6c;
@@ -392,71 +393,72 @@ public:
       for (const auto &entry : tpi) {
           if (std::holds_alternative<TexturePackResource>(entry.second)) {
               const auto& res = std::get<TexturePackResource>(entry.second);
-              std::filesystem::path file_path = out_dir / (res.Name + ".png");
+              std::filesystem::path file_path = out_dir / (res.Name + ".dds");
               //std::ofstream file; // if (!ofs) ...
               //file.open(file_path, std::ios::binary);
               if (res.Format != TextureResourceFormat::A8R8G8B8) {
-                //  std::vector<unsigned char> buf(124);
-                //  unsigned char data1[] = {0x44, 0x44, 0x53, 0x20, 0x7C, 0x00,
-                //                          0x00, 0x00, 0x07, 0x10, 0x08, 0x00};
-                //  size_t data1_size = sizeof(data1) / sizeof(data1[0]);
-                //
-                //  memcpy(buf.data(), data1, data1_size);
-                //  //file.write((const char *)data1, data1_size);
-                //
-                //  //file.write(reinterpret_cast<const char *>(&res.Height), sizeof(res.Height));
-                //  memcpy(buf.data() + data1_size, reinterpret_cast<const char *>(&res.Height),
-                //  sizeof(res.Height));
-                //  //file.write(reinterpret_cast<const char *>(&res.Width), sizeof(res.Width));
-                //  memcpy(buf.data() + data1_size + sizeof(res.Width),
-                //         reinterpret_cast<const char *>(&res.Width),
-                //         sizeof(res.Width));
-                //
-                //  uint32_t dw = 0x0400;
-                //  //file.write(reinterpret_cast<const char *>(&dw), sizeof(dw));
-                //  //memcpy(buf.data())
-                //  unsigned char data2[] = {
-                //      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                //      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                //      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                //      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                //      0x00, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00,
-                //      0x44, 0x58, 0x54};
-                //  size_t data2_size = sizeof(data2) / sizeof(data2[0]);
-                //
-                //  file.write((const char *)data2, data2_size);
-                //
-                //  if (res.Format == TextureResourceFormat::DXT1) {
-                //    unsigned char b = 0x35;
-                //    file.write(reinterpret_cast<const char *>(&b), sizeof(b));
-                //  } else if (res.Format == TextureResourceFormat::DXT3) {
-                //    unsigned char b = 0x35;
-                //    file.write(reinterpret_cast<const char *>(&b), sizeof(b));
-                //  } else if (res.Format == TextureResourceFormat::DXT5) {
-                //    unsigned char b = 0x35;
-                //    file.write(reinterpret_cast<const char *>(&b), sizeof(b));
-                //  } // else ...
-                //
-                //  unsigned char data3[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                //                           0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                //                           0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00,
-                //                           0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                //                           0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-                //  size_t data3_size = sizeof(data3) / sizeof(data3[0]);
-                //
-                //  file.write((const char *)data3, data3_size);
-                //  file.close();
-                //
-                //  const LPVOID lpMap = m_TexturePackFileMap.at(flag).GetMapView();
-                //  char *fptr = static_cast<char *>(lpMap);
-                //  char *start = fptr + res.Offset;
-                //
-                //  //fpng::decode
-                //  //fpng::fpng_encode_image_to_file(file_path.generic_string().c_str(), (void
-                //  *)start,
-                //  //                                res.Width, res.Height, 3,
-                //  fpng::FPNG_FORCE_UNCOMPRESSED);
-                //
+                std::stringstream file;
+                std::vector<unsigned char> buf(124);
+                unsigned char data1[] = {0x44, 0x44, 0x53, 0x20, 0x7C, 0x00,
+                                        0x00, 0x00, 0x07, 0x10, 0x08, 0x00};
+                size_t data1_size = sizeof(data1) / sizeof(data1[0]);
+
+                file.write((const char *)data1, data1_size);
+                file.write(reinterpret_cast<const char *>(&res.Height), sizeof(res.Height));
+                file.write(reinterpret_cast<const char *>(&res.Width), sizeof(res.Width));
+
+                uint32_t dw = 0x0400;
+                file.write(reinterpret_cast<const char *>(&dw), sizeof(dw));
+
+                unsigned char data2[] = {
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00,
+                    0x44, 0x58, 0x54};
+                size_t data2_size = sizeof(data2) / sizeof(data2[0]);
+                               file.write((const char *)data2, data2_size);
+
+                               if (res.Format == TextureResourceFormat::DXT1) {
+                  unsigned char b = 0x31;
+                  file.write(reinterpret_cast<const char *>(&b), sizeof(b));
+                } else if (res.Format == TextureResourceFormat::DXT3) {
+                  unsigned char b = 0x33;
+                  file.write(reinterpret_cast<const char *>(&b), sizeof(b));
+                } else if (res.Format == TextureResourceFormat::DXT5) {
+                  unsigned char b = 0x35;
+                  file.write(reinterpret_cast<const char *>(&b), sizeof(b));
+                } // else ...
+                               unsigned char data3[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                                         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                                         0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00,
+                                         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                                         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+                size_t data3_size = sizeof(data3) / sizeof(data3[0]);
+                file.write((const char *)data3, data3_size);
+
+                TexturePackType type = GetType(m_TexturePackFileMap.at(flag));
+                LPVOID lpMap = NULL;
+                bool allgood = true;
+                if (type == TexturePackType::PERM) {
+                  lpMap = GetPerm(m_TexturePackFileMap.at(flag)).GetMapView();
+                } else if (type == TexturePackType::TEMP) {
+                  lpMap = GetTemp(m_TexturePackFileMap.at(flag)).GetMapView();
+                } else {
+                  std::cerr << "Invalid TexturePackType" << std::endl;
+                  allgood = false;
+                }
+                if (allgood) {
+                  char *fptr = static_cast<char *>(lpMap);
+                  char *start = fptr + res.Offset;
+                  file.write((const char *)start, res.Size);
+                  std::ofstream file2; // if (!ofs) ...
+                  file2.open(file_path, std::ios::binary);
+                  file2.write((const char*)file.str().c_str(), 128 + res.Size);
+                  file2.close();
+
+                }
               
               } else {
                 TexturePackType type = GetType(m_TexturePackFileMap.at(flag));
