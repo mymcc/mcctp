@@ -7,7 +7,7 @@
 	path = external/fpng
 	url = https://github.com/Stehfyn/fpng
         ignore = dirty
-[submodule "external/Legacy_DDS_Utilities"]
-	path = external/Legacy_DDS_Utilities
-	url = https://github.com/Stehfyn/Legacy_DDS_Utilities
-        ignore = dirty
+[submodule "external/glew"]
+	path = external/glew
+	url = https://github.com/Stehfyn/glew
+	ignore = dirty

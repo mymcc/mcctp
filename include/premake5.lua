@@ -17,17 +17,23 @@ project "mcctp"
     {
         ".",
         "%{IncludeDir.fpng}",
-
+        "%{IncludeDir.GLEW}",
     }
 
     links
     {
         "fpng",
+        "GLEW"
     }
 
     libdirs
     {
         
+    }
+
+    defines
+    {
+        "GLEW_STATIC"
     }
 
     targetdir ("../bin/" .. outputdir .. "/%{prj.name}")

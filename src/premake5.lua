@@ -21,6 +21,7 @@ project "mcctp-example"
         "%{IncludeDir.mcctp}",
         "%{IncludeDir.imgui}",
         "%{IncludeDir.fpng}",
+        "%{IncludeDir.GLEW}",
     }
 
     links
@@ -33,6 +34,11 @@ project "mcctp-example"
     libdirs
     {
 
+    }
+
+    defines
+    {
+        "GLEW_STATIC"
     }
 
     targetdir ("../bin/" .. outputdir .. "/%{prj.name}")

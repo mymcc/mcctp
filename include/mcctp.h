@@ -11,6 +11,9 @@
 #include <tuple>
 #include <memory>
 
+#include "GL/glew.h"
+#include "GL/wglew.h"
+
 #include "fpng.h"
 
 #define WIN32_LEAN_AND_MEAN
@@ -18,6 +21,39 @@
 
 #include <codecvt>
 #include <locale>
+
+static GLuint compileShader(GLenum type, const char* src) {
+    GLuint shader = glCreateShader(type);
+    glShaderSource(shader, 1, &src, NULL);
+    glCompileShader(shader);
+
+    GLint status;
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &status);
+    if (!status) {
+        char infoLog[512];
+        glGetShaderInfoLog(shader, 512, NULL, infoLog);
+        std::cerr << "Error compiling shader:\n" << infoLog << std::endl;
+    }
+
+    return shader;
+}
+
+static GLuint linkProgram(GLuint vertexShader, GLuint fragmentShader) {
+    GLuint program = glCreateProgram();
+    glAttachShader(program, vertexShader);
+    glAttachShader(program, fragmentShader);
+    glLinkProgram(program);
+
+    GLint status;
+    glGetProgramiv(program, GL_LINK_STATUS, &status);
+    if (!status) {
+        char infoLog[512];
+        glGetProgramInfoLog(program, 512, NULL, infoLog);
+        std::cerr << "Error linking program:\n" << infoLog << std::endl;
+    }
+
+    return program;
+}
 
 namespace mcctp {
 #pragma warning(disable : 4996)
@@ -237,10 +273,17 @@ public:
     static bool init = true;
     if (init) {
       fpng::fpng_init();
+      glewInit();
+      Context->vertexShader = compileShader(GL_VERTEX_SHADER, Context->vertexShaderSrc);
+      Context->fragmentShader = compileShader(GL_FRAGMENT_SHADER, Context->fragmentShaderSrc);
+      Context->program = linkProgram(Context->vertexShader, Context->fragmentShader);
+      glDeleteShader(Context->vertexShader);
+      glDeleteShader(Context->fragmentShader);
       init = false;
     }
     return Context;
   }
+  GLuint _prgram() { return program; }
   void SetField(uint16_t field = (uint16_t)TexturePackFlags::All) {
     m_Field = (TexturePackField)field;
   }
@@ -393,7 +436,8 @@ public:
       for (const auto &entry : tpi) {
           if (std::holds_alternative<TexturePackResource>(entry.second)) {
               const auto& res = std::get<TexturePackResource>(entry.second);
-              std::filesystem::path file_path = out_dir / (res.Name + ".dds");
+              std::filesystem::path file_path = out_dir / (res.Name + ".png");
+              //std::filesystem::path file_path = out_dir / (res.Name + ".dds");
               if (res.Format != TextureResourceFormat::A8R8G8B8) {
                 std::stringstream bytestream;
                 unsigned char data1[] = {0x44, 0x44, 0x53, 0x20, 0x7C, 0x00,
@@ -450,13 +494,88 @@ public:
                   char *fptr = static_cast<char *>(lpMap);
                   char *start = fptr + res.Offset;
 
-                  std::ofstream file;
-                  if (file) {
-                    bytestream.write((const char *)start, res.Size);
-                    file.open(file_path, std::ios::binary);
-                    file.write((const char *)bytestream.str().c_str(), 128 + res.Size);
-                    file.close();
+                  //std::ofstream file;
+                  //if (file) {
+                  //  bytestream.write((const char *)start, res.Size);
+                  //  file.open(file_path, std::ios::binary);
+                  //  file.write((const char *)bytestream.str().c_str(), 128 + res.Size);
+                  //  file.close();
+                  //}
+
+                  GLuint tex;
+                  glGenTextures(1, &tex);
+                  glBindTexture(GL_TEXTURE_2D, tex);
+                  if (res.Format == TextureResourceFormat::DXT1) {
+                      glCompressedTexImage2D(GL_TEXTURE_2D, 0, GL_COMPRESSED_RGBA_S3TC_DXT1_EXT, res.Width, res.Height, 0, res.Size, start);
                   }
+                  else if (res.Format == TextureResourceFormat::DXT3) {
+                      glCompressedTexImage2D(GL_TEXTURE_2D, 0, GL_COMPRESSED_RGBA_S3TC_DXT3_EXT, res.Width, res.Height, 0, res.Size, start);
+                  }
+                  else if (res.Format == TextureResourceFormat::DXT5) {
+                      glCompressedTexImage2D(GL_TEXTURE_2D, 0, GL_COMPRESSED_RGBA_S3TC_DXT5_EXT, res.Width, res.Height, 0, res.Size, start);
+                  }
+                  else {
+                      // Handle unsupported formats
+                  }
+                  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                  glGenerateMipmap(GL_TEXTURE_2D);
+
+                  // Create a new texture to store the decompressed image
+                  GLuint rgbTex;
+                  glGenTextures(1, &rgbTex);
+                  glBindTexture(GL_TEXTURE_2D, rgbTex);
+                  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, res.Width, res.Height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+                  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+                  // Create a framebuffer object (FBO) and attach the decompressed texture to it
+                  GLuint fbo;
+                  glGenFramebuffers(1, &fbo);
+                  glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+                  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, rgbTex, 0);
+
+                  // Check FBO status
+                  GLenum fboStatus = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+                  if (fboStatus != GL_FRAMEBUFFER_COMPLETE) {
+                      // Handle error
+                  }
+                  glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+                  glClear(GL_COLOR_BUFFER_BIT);
+                  // Render a full-screen quad with the compressed texture bound here
+                  // The decompressed image will be rendered into rgbTex
+                  GLint texLocation = glGetUniformLocation(ctx::Instance()->_prgram(), "tex");
+
+                  // Bind your program
+                  glUseProgram(ctx::Instance()->_prgram());
+
+                  // Bind your texture to texture unit 0
+                  glActiveTexture(GL_TEXTURE0);
+                  glBindTexture(GL_TEXTURE_2D, tex);
+
+                  // Set the 'tex' uniform to texture unit 0
+                  glUniform1i(texLocation, 0);
+
+                  // Render the fullscreen quad
+                  glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+                  // Bind the FBO and read the pixels from the decompressed texture
+                  glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+                  std::vector<char> pixels(res.Width * res.Height * 4);
+                  glReadPixels(0, 0, res.Width, res.Height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+
+                  // Unbind and delete resources
+                  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                  glBindTexture(GL_TEXTURE_2D, 0);
+                  glDeleteTextures(1, &rgbTex);
+                  glDeleteTextures(1, &tex);
+                  glDeleteFramebuffers(1, &fbo);
+
+                  fpng::fpng_encode_image_to_file(file_path.generic_string().c_str(), pixels.data(),
+                      res.Width, res.Height, 4,
+                      fpng::FPNG_FORCE_UNCOMPRESSED);
+                  
+                  
                 }
               
               } else {
@@ -489,6 +608,36 @@ private:
   std::filesystem::path m_PathPrefix;
   std::unordered_map<TexturePackFlags, TexturePack> m_TexturePackFileMap;
   std::unordered_map<TexturePackFlags, TexturePackIndex> m_TexturePackIndexMap;
+  GLuint vertexShader;
+  GLuint fragmentShader;
+  GLuint program;
+  const char* vertexShaderSrc = R"(
+#version 330 core
+
+const vec2 vertices[4] = vec2[](
+    vec2(-1.0, -1.0),
+    vec2(1.0, -1.0),
+    vec2(-1.0,  1.0),
+    vec2(1.0,  1.0)
+);
+
+void main() {
+    gl_Position = vec4(vertices[gl_VertexID], 0.0, 1.0);
+}
+)";
+
+  const char* fragmentShaderSrc = R"(
+#version 330 core
+
+uniform sampler2D tex;
+
+out vec4 FragColor;
+
+void main() {
+    FragColor = texture(tex, gl_FragCoord.xy / textureSize(tex, 0));
+    //FragColor = vec4(1.0, 0.0, 0.0, 1.0);  // Render everything red
+}
+)";
 };
 
 static void Initialize(std::filesystem::path path, TexturePackFlags flags = TexturePackFlags::All) {
