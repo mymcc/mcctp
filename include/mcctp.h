@@ -266,6 +266,11 @@ struct TexturePackField {
   bool HasAnyFlag(TexturePackFlags flags) { return (m_Field & (int)flags) != 0; }
 };
 
+enum class OutputFlags {
+    NativeFormat,
+    EncodeToPNG
+};
+
 class ctx {
 public:
   static ctx *Instance() {
@@ -423,7 +428,7 @@ public:
 
       return true;
   }
-  bool DumpTexturePack(TexturePackFlags flag) {
+  bool DumpTexturePack(TexturePackFlags flag, OutputFlags format_flag = OutputFlags::NativeFormat) {
       std::filesystem::path out_dir = m_PathPrefix / FlagToBasename.at(flag);
       if (std::filesystem::exists(out_dir)) {
           std::cout << "Error out dir (" << out_dir.generic_string() << ")" << " already exists!" << std::endl;
@@ -436,8 +441,10 @@ public:
       for (const auto &entry : tpi) {
           if (std::holds_alternative<TexturePackResource>(entry.second)) {
               const auto& res = std::get<TexturePackResource>(entry.second);
-              std::filesystem::path file_path = out_dir / (res.Name + ".png");
-              //std::filesystem::path file_path = out_dir / (res.Name + ".dds");
+
+              std::filesystem::path file_path_png = out_dir / (res.Name + ".png");
+              std::filesystem::path file_path_dds = out_dir / (res.Name + ".dds");
+
               if (res.Format != TextureResourceFormat::A8R8G8B8) {
                 std::stringstream bytestream;
                 unsigned char data1[] = {0x44, 0x44, 0x53, 0x20, 0x7C, 0x00,
@@ -494,88 +501,98 @@ public:
                   char *fptr = static_cast<char *>(lpMap);
                   char *start = fptr + res.Offset;
 
-                  //std::ofstream file;
-                  //if (file) {
-                  //  bytestream.write((const char *)start, res.Size);
-                  //  file.open(file_path, std::ios::binary);
-                  //  file.write((const char *)bytestream.str().c_str(), 128 + res.Size);
-                  //  file.close();
-                  //}
+                  if (format_flag == OutputFlags::NativeFormat) {
+                     std::ofstream file(file_path_dds, std::ios::binary);
+                     if (file) {
+                      bytestream.write((const char *)start, res.Size);
+                      file.write((const char *)bytestream.str().c_str(), 128 + res.Size);
+                      file.close();
+                    }
+                  } else {
 
-                  GLuint tex;
-                  glGenTextures(1, &tex);
-                  glBindTexture(GL_TEXTURE_2D, tex);
-                  if (res.Format == TextureResourceFormat::DXT1) {
-                      glCompressedTexImage2D(GL_TEXTURE_2D, 0, GL_COMPRESSED_RGBA_S3TC_DXT1_EXT, res.Width, res.Height, 0, res.Size, start);
-                  }
-                  else if (res.Format == TextureResourceFormat::DXT3) {
-                      glCompressedTexImage2D(GL_TEXTURE_2D, 0, GL_COMPRESSED_RGBA_S3TC_DXT3_EXT, res.Width, res.Height, 0, res.Size, start);
-                  }
-                  else if (res.Format == TextureResourceFormat::DXT5) {
-                      glCompressedTexImage2D(GL_TEXTURE_2D, 0, GL_COMPRESSED_RGBA_S3TC_DXT5_EXT, res.Width, res.Height, 0, res.Size, start);
-                  }
-                  else {
+                     GLuint tex;
+                     glGenTextures(1, &tex);
+                     glBindTexture(GL_TEXTURE_2D, tex);
+                     uint16_t decompress_from = 0;
+                     if (res.Format == TextureResourceFormat::DXT1) {
+                      decompress_from = GL_COMPRESSED_RGBA_S3TC_DXT1_EXT;
+                     } else if (res.Format == TextureResourceFormat::DXT3) {
+                      decompress_from = GL_COMPRESSED_RGBA_S3TC_DXT3_EXT;
+                     } else if (res.Format == TextureResourceFormat::DXT5) {
+                      decompress_from = GL_COMPRESSED_RGBA_S3TC_DXT5_EXT;
+                     } else {
                       // Handle unsupported formats
-                  }
-                  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-                  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-                  glGenerateMipmap(GL_TEXTURE_2D);
+                     }
 
-                  // Create a new texture to store the decompressed image
-                  GLuint rgbTex;
-                  glGenTextures(1, &rgbTex);
-                  glBindTexture(GL_TEXTURE_2D, rgbTex);
-                  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, res.Width, res.Height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-                  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-                  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                     glCompressedTexImage2D(GL_TEXTURE_2D, 0, decompress_from,
+                                            res.Width, res.Height, 0, res.Size, start);
 
-                  // Create a framebuffer object (FBO) and attach the decompressed texture to it
-                  GLuint fbo;
-                  glGenFramebuffers(1, &fbo);
-                  glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-                  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, rgbTex, 0);
+                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
+                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+                     glGenerateMipmap(GL_TEXTURE_2D);
 
-                  // Check FBO status
-                  GLenum fboStatus = glCheckFramebufferStatus(GL_FRAMEBUFFER);
-                  if (fboStatus != GL_FRAMEBUFFER_COMPLETE) {
+                     // Create a new texture to store the decompressed image
+                     GLuint rgbTex;
+                     glGenTextures(1, &rgbTex);
+                     glBindTexture(GL_TEXTURE_2D, rgbTex);
+                     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, res.Width, res.Height, 0, GL_RGBA,
+                                  GL_UNSIGNED_BYTE, NULL);
+                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+                     // Create a framebuffer object (FBO) and attach the decompressed texture to it
+                     GLuint fbo;
+                     glGenFramebuffers(1, &fbo);
+                     glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+                     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
+                                            rgbTex, 0);
+
+                     // Check FBO status
+                     GLenum fboStatus = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+                     if (fboStatus != GL_FRAMEBUFFER_COMPLETE) {
                       // Handle error
+                     }
+                     glViewport(0, 0, res.Width, res.Height);
+                     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+                     glClear(GL_COLOR_BUFFER_BIT);
+                     // Render a full-screen quad with the compressed texture bound here
+                     // The decompressed image will be rendered into rgbTex
+                     GLint texLocation = glGetUniformLocation(ctx::Instance()->_prgram(), "tex");
+
+                     // Bind your program
+                     glUseProgram(ctx::Instance()->_prgram());
+
+                     // Bind your texture to texture unit 0
+                     glActiveTexture(GL_TEXTURE0);
+                     glBindTexture(GL_TEXTURE_2D, tex);
+
+                     // Set the 'tex' uniform to texture unit 0
+                     glUniform1i(texLocation, 0);
+
+                     // Render the fullscreen quad
+                     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+                     // Bind the FBO and read the pixels from the decompressed texture
+                     glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+                     std::vector<char> pixels(res.Width * res.Height * 4);
+                     glReadPixels(0, 0, res.Width, res.Height, GL_RGBA, GL_UNSIGNED_BYTE,
+                                  pixels.data());
+
+                     // Unbind and delete resources
+                     glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                     glBindTexture(GL_TEXTURE_2D, 0);
+                     glDeleteTextures(1, &rgbTex);
+                     glDeleteTextures(1, &tex);
+                     glDeleteFramebuffers(1, &fbo);
+
+                     fpng::fpng_encode_image_to_file(file_path_png.generic_string().c_str(),
+                                                     pixels.data(), res.Width, res.Height, 4,
+                                                     fpng::FPNG_FORCE_UNCOMPRESSED);
                   }
-                  glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-                  glClear(GL_COLOR_BUFFER_BIT);
-                  // Render a full-screen quad with the compressed texture bound here
-                  // The decompressed image will be rendered into rgbTex
-                  GLint texLocation = glGetUniformLocation(ctx::Instance()->_prgram(), "tex");
-
-                  // Bind your program
-                  glUseProgram(ctx::Instance()->_prgram());
-
-                  // Bind your texture to texture unit 0
-                  glActiveTexture(GL_TEXTURE0);
-                  glBindTexture(GL_TEXTURE_2D, tex);
-
-                  // Set the 'tex' uniform to texture unit 0
-                  glUniform1i(texLocation, 0);
-
-                  // Render the fullscreen quad
-                  glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-
-                  // Bind the FBO and read the pixels from the decompressed texture
-                  glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-                  std::vector<char> pixels(res.Width * res.Height * 4);
-                  glReadPixels(0, 0, res.Width, res.Height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
-
-                  // Unbind and delete resources
-                  glBindFramebuffer(GL_FRAMEBUFFER, 0);
-                  glBindTexture(GL_TEXTURE_2D, 0);
-                  glDeleteTextures(1, &rgbTex);
-                  glDeleteTextures(1, &tex);
-                  glDeleteFramebuffers(1, &fbo);
-
-                  fpng::fpng_encode_image_to_file(file_path.generic_string().c_str(), pixels.data(),
-                      res.Width, res.Height, 4,
-                      fpng::FPNG_FORCE_UNCOMPRESSED);
-                  
-                  
                 }
               
               } else {
@@ -593,7 +610,7 @@ public:
                 if (allgood) {
                   char *fptr = static_cast<char *>(lpMap);
                   char *start = fptr + res.Offset;
-                  fpng::fpng_encode_image_to_file(file_path.generic_string().c_str(), start,
+                  fpng::fpng_encode_image_to_file(file_path_png.generic_string().c_str(), start,
                                                   res.Width, res.Height, 4,
                                                   fpng::FPNG_FORCE_UNCOMPRESSED);
                 }
@@ -683,12 +700,12 @@ static bool IndexTexturePacks(void) {
   return true;
 }
 
-static bool DumpTexturePacks(void) {
+static bool DumpTexturePacks(OutputFlags format_flag = OutputFlags::NativeFormat) {
     TexturePackField field = ctx::Instance()->GetField();
     for (uint8_t i = 0; i < TexturePackCount; ++i) {
         TexturePackFlags flag = (TexturePackFlags)(1 << i);
         if (field.HasFlag(flag)) {
-            ctx::Instance()->DumpTexturePack(flag);
+            ctx::Instance()->DumpTexturePack(flag, format_flag);
         }
     }
     return true;

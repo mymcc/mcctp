@@ -28,7 +28,7 @@ void mcctp::StreamedImage::OnUIRender() {
 	  mcctp::IndexTexturePacks();
   }
   if (ImGui::Button("Dump TexturePacks")) {
-      mcctp::DumpTexturePacks();
+      mcctp::DumpTexturePacks(mcctp::OutputFlags::EncodeToPNG);
   }
   ImGui::End();
 }
