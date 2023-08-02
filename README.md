@@ -1,4 +1,4 @@
-# mcctp - MCC Texture Pack Lib ![Release](https://github.com/Stehfyn/mcctp/actions/workflows/msbuild.yml/badge.svg)
+# MCC Texture Pack Lib ![Release](https://github.com/Stehfyn/mcctp/actions/workflows/msbuild.yml/badge.svg)
 
 <p align="center">
 <img align="center" width="75%" height="75%" src="res/Screenshot-2023-08-02-022645.png">
