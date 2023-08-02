@@ -1,39 +1,43 @@
 @echo off
-setlocal
+setlocal enabledelayedexpansion
 
-set root="%~dp0..\"
+set root=%~dp0..
 pushd %root%
 
 rem Visual Studio Solution Files
-del /q /f "*.sln"
-rmdir /s /q ".vs"
-
-rem explicit for now
+del /q /f /s "*.sln"
+del /q /f /s "include\*.vcxproj"
 del /q /f /s "src\*.vcxproj"
-del /q /f /s "src\*.vcxproj.user"
 del /q /f /s "src\*.vcxproj.filters"
+del /q /f /s "external\fpng\*.vcxproj"
+del /q /f /s "external\fpng\*.vcxproj.filters"
+del /q /f /s "external\imgui\imgui.vcxproj"
+del /q /f /s "external\imgui\imgui.vcxproj.filters"
+del /q /f /s "external\glew\glew.vcxproj"
+del /q /f /s "external\glew\glew.vcxproj.filters"
 
-rem explicit for now
-del /q /f /s "lib\*.vcxproj"
-del /q /f /s "lib\*.vcxproj.user"
-del /q /f /s "lib\*.vcxproj.filters"
-
-del /q /f  "external\imgui\*.vcxproj"
-del /q /f  "external\imgui\*.vcxproj.user"
-del /q /f  "external\imgui\*.vcxproj.filters"
-
-
-rem Application Binaries (TODO)
-rmdir /s /q "bin"
-rmdir /s /q "bin-int"
+rem Visual Studio Solution Folders and Binaries
+for %%G in (
+    .vs 
+    bin 
+    bin-int 
+    external\fpng\bin 
+    external\fpng\bin-int 
+    external\imgui\bin 
+    external\imgui\bin-int 
+    external\glew\bin
+    external\glew\bin-int
+) do (
+    set "target=%%G"
+    rmdir /s /q !target! >nul 2>&1 && (echo Removed folder - %root%\!target!) || (echo Could Not Find %root%\!target!)
+)
 
 echo %cmdcmdline%|find /i """%~f0""">nul && (
-    REM Batchfile was double clicked
+    rem Batchfile was double clicked
     pause
 ) || (
-    REM Batchfile was executed from the console
+    rem Batchfile was executed from the console
 )
 
 popd
 endlocal
-
