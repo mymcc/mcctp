@@ -3,10 +3,8 @@
 #include <vector>
 #include <stdint.h>
 #include <filesystem>
-
-#define WIN32_LEAN_AND_MEAN
+#include <deque>
 #include <windows.h>
-#undef WIN32_LEAN_AND_MEAN
 
 // Data stored per platform window
 struct WGL_WindowData { HDC hDC; };

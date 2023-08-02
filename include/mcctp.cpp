@@ -6,7 +6,7 @@ namespace mcctp {
 #pragma warning(disable: 4996)
         using converter = std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>>;
 
-        const char* vertexShaderSrc = R"(
+        const char* s_DefaultVertexShaderSrc = R"(
 #version 330 core
 
 const vec2 vertices[4] = vec2[](
@@ -21,7 +21,7 @@ void main() {
 }
 )";
 
-        const char* fragmentShaderSrc = R"(
+        const char* s_DefaultFragmentShaderSrc = R"(
 #version 330 core
 
 uniform sampler2D tex;
@@ -34,7 +34,7 @@ void main() {
 }
 )";
 
-        static GLuint compileShader(GLenum type, const char* src) {
+        static GLuint CompileShader(GLenum type, const char* src) {
             GLuint shader = glCreateShader(type);
             glShaderSource(shader, 1, &src, NULL);
             glCompileShader(shader);
@@ -50,7 +50,7 @@ void main() {
             return shader;
         }
 
-        static GLuint linkProgram(GLuint vertexShader, GLuint fragmentShader) {
+        static GLuint LinkProgram(GLuint vertexShader, GLuint fragmentShader) {
             GLuint program = glCreateProgram();
             glAttachShader(program, vertexShader);
             glAttachShader(program, fragmentShader);
@@ -75,6 +75,7 @@ void main() {
 
     bool MemoryMapTexturePacks(void) {
         TexturePackField field = ctx::Instance()->GetField();
+        std::cout << "Field: " << field << std::endl;
         for (uint8_t i = 0; i < TexturePackCount; ++i) {
             TexturePackFlags flag = (TexturePackFlags)(1 << i);
             if (field.HasFlag(flag)) {
@@ -84,6 +85,13 @@ void main() {
             }
         }
         return true;
+    }
+
+    void UnmapTexturePacks(void) { 
+        for (uint8_t i = 0; i < TexturePackCount; ++i) {
+            TexturePackFlags flag = (TexturePackFlags)(1 << i);
+            ctx::Instance()->UnmapTexturePack(flag);
+        }
     }
 
     bool IndexTexturePacks(void) {
@@ -111,15 +119,161 @@ void main() {
         return true;
     }
 
-    bool DumpTexturePacks(OutputFlags format_flag) {
+    bool DumpTexturePacks(DumpFormatFlags dump_format, DumpCompressionFlags compression_flag) {
         TexturePackField field = ctx::Instance()->GetField();
         for (uint8_t i = 0; i < TexturePackCount; ++i) {
             TexturePackFlags flag = (TexturePackFlags)(1 << i);
             if (field.HasFlag(flag)) {
-                ctx::Instance()->DumpTexturePack(flag, format_flag);
+                ctx::Instance()->DumpTexturePack(flag, dump_format, compression_flag);
             }
         }
         return true;
+    }
+
+    void ClearTexturePackDumps(void) { 
+        TexturePackField field = ctx::Instance()->GetField();
+        for (uint8_t i = 0; i < TexturePackCount; ++i) {
+            TexturePackFlags flag = (TexturePackFlags)(1 << i);
+            ctx::Instance()->DeleteTexturePackDump(flag);
+        }
+    }
+
+    GLuint RenderDDSToTexture(TexturePackResource res) { 
+        auto *inst = ctx::Instance();
+        return inst->RenderDDSToTexture(res);
+    }
+
+    bool ShareWithWGLContext(HGLRC hrc) {
+        auto *inst = ctx::Instance();
+        return inst->ShareWithWGLContext(hrc);
+    }
+
+    std::stringstream BuildDDSHeaderForResource(TexturePackResource res) {
+        std::stringstream bytestream;
+        unsigned char data1[] = {0x44, 0x44, 0x53, 0x20, 0x7C, 0x00,
+                                 0x00, 0x00, 0x07, 0x10, 0x08, 0x00};
+        size_t data1_size = sizeof(data1) / sizeof(data1[0]);
+
+        bytestream.write((const char *)data1, data1_size);
+        bytestream.write(reinterpret_cast<const char *>(&res.Height), sizeof(res.Height));
+        bytestream.write(reinterpret_cast<const char *>(&res.Width), sizeof(res.Width));
+
+        uint32_t dw = 0x0400;
+        bytestream.write(reinterpret_cast<const char *>(&dw), sizeof(dw));
+
+        unsigned char data2[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00,
+                                 0x00, 0x04, 0x00, 0x00, 0x00, 0x44, 0x58, 0x54};
+        size_t data2_size = sizeof(data2) / sizeof(data2[0]);
+        bytestream.write((const char *)data2, data2_size);
+
+        unsigned char b = 0x00;
+        if (res.Format == ResourceFormat::DXT1) {
+            b = 0x31;
+        } else if (res.Format == ResourceFormat::DXT3) {
+            b = 0x33;
+        } else if (res.Format == ResourceFormat::DXT5) {
+            b = 0x35;
+        }
+        bytestream.write(reinterpret_cast<const char *>(&b), sizeof(b));
+
+        unsigned char data3[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                                 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+        size_t data3_size = sizeof(data3) / sizeof(data3[0]);
+        bytestream.write((const char *)data3, data3_size);
+        return bytestream;
+    }
+
+    GLuint ctx::RenderDDSToTexture(TexturePackResource res) {
+        HDC hdc = wglGetCurrentDC();
+        HGLRC hrc = wglGetCurrentContext();
+
+        wglMakeCurrent(m_hDC, m_hRC);
+
+        char *start = res.Origin + res.Offset;
+
+        GLuint tex;
+        glGenTextures(1, &tex);
+        glBindTexture(GL_TEXTURE_2D, tex);
+        uint16_t decompress_from = 0;
+        if (res.Format == ResourceFormat::DXT1) {
+            decompress_from = GL_COMPRESSED_RGBA_S3TC_DXT1_EXT;
+        } else if (res.Format == ResourceFormat::DXT3) {
+            decompress_from = GL_COMPRESSED_RGBA_S3TC_DXT3_EXT;
+        } else if (res.Format == ResourceFormat::DXT5) {
+            decompress_from = GL_COMPRESSED_RGBA_S3TC_DXT5_EXT;
+        } else {
+            // Handle unsupported formats
+        }
+
+        glCompressedTexImage2D(GL_TEXTURE_2D, 0, decompress_from, res.Width, res.Height, 0,
+                               res.Size, start);
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+        glGenerateMipmap(GL_TEXTURE_2D);
+        // Create a new texture to store the decompressed image
+        GLuint rgbaTex;
+        glGenTextures(1, &rgbaTex);
+        glBindTexture(GL_TEXTURE_2D, rgbaTex);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, res.Width, res.Height, 0, GL_RGBA, GL_UNSIGNED_BYTE,
+                     NULL);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+        // Create a framebuffer object (FBO) and attach the decompressed texture to it
+        GLuint fbo;
+        glGenFramebuffers(1, &fbo);
+        glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, rgbaTex, 0);
+
+        // Check FBO status
+        GLenum fboStatus = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+        if (fboStatus != GL_FRAMEBUFFER_COMPLETE) {
+            // Handle error
+        }
+        glViewport(0, 0, res.Width, res.Height);
+        glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+        // Render a full-screen quad with the compressed texture bound here
+        // The decompressed image will be rendered into rgbTex
+        GLint texLocation = glGetUniformLocation(m_OutputProgram, "tex");
+
+        // Bind your program
+        glUseProgram(m_OutputProgram);
+
+        // Bind your texture to texture unit 0
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, tex);
+
+        // Set the 'tex' uniform to texture unit 0
+        glUniform1i(texLocation, 0);
+
+        // Render the fullscreen quad
+        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glBindTexture(GL_TEXTURE_2D, 0);
+        glDeleteTextures(1, &rgbaTex);
+        glDeleteTextures(1, &tex);
+        glDeleteFramebuffers(1, &fbo);
+
+        wglMakeCurrent(hdc, hrc);
+
+        return rgbaTex;
+    }
+
+    bool ctx::ShareWithWGLContext(HGLRC hrc) {
+        return wglShareLists(hrc, m_hRC); 
     }
 
     FileMapping::FileMapping(std::wstring path) {
@@ -157,22 +311,6 @@ void main() {
             other.lpMap = NULL;
         }
         return *this;
-    }
-
-    ctx* ctx::Instance() {
-        static ctx* Context = new ctx;
-        static bool init = true;
-        if (init) {
-            fpng::fpng_init();
-            glewInit();
-            Context->vertexShader = compileShader(GL_VERTEX_SHADER, vertexShaderSrc);
-            Context->fragmentShader = compileShader(GL_FRAGMENT_SHADER, fragmentShaderSrc);
-            Context->program = linkProgram(Context->vertexShader, Context->fragmentShader);
-            glDeleteShader(Context->vertexShader);
-            glDeleteShader(Context->fragmentShader);
-            init = false;
-        }
-        return Context;
     }
 
     FileMapping::~FileMapping() {
@@ -230,6 +368,40 @@ void main() {
         return os;
     }
 
+    ctx *ctx::Instance() {
+        static ctx *Context = new ctx;
+        static bool init = true;
+        if (init) {
+            fpng::fpng_init();
+            if (glewInit() == GLEW_OK) {
+                Context->InitializeGLContext();
+                Context->m_ClientHasWGLContext = true;
+            } else {
+                Context->m_ClientHasWGLContext = false;
+            }
+            init = false;
+        }
+        return Context;
+    }
+
+    void ctx::InitializeGLContext(void) {
+        HDC hdc = wglGetCurrentDC();
+        HGLRC hrc = wglGetCurrentContext();
+
+        m_hDC = hdc;
+        m_hRC = wglCreateContext(m_hDC);
+        wglMakeCurrent(m_hDC, m_hRC);
+
+        m_OutputVertexShader = CompileShader(GL_VERTEX_SHADER, s_DefaultVertexShaderSrc);
+        m_OutputFragmentShader = CompileShader(GL_FRAGMENT_SHADER, s_DefaultFragmentShaderSrc);
+        m_OutputProgram =
+            LinkProgram(m_OutputVertexShader, m_OutputFragmentShader);
+        glDeleteShader(m_OutputVertexShader);
+        glDeleteShader(m_OutputFragmentShader);
+
+        wglMakeCurrent(hdc, hrc);
+    }
+
     bool ctx::MemoryMapTexturePack(TexturePackFlags flag, std::wstring texture_pack_basename) {
         try {
             using namespace std::filesystem;
@@ -266,6 +438,20 @@ void main() {
             return false;
         }
     }
+
+    void ctx::UnmapTexturePack(TexturePackFlags flag) { 
+        m_TexturePackFileMap.erase(flag);
+        m_TexturePackIndexMap.erase(flag);
+    }
+
+    bool ctx::IsTexturePackMapped(TexturePackFlags flag) const { 
+        return m_TexturePackFileMap.find(flag) != m_TexturePackFileMap.end();
+    }
+
+    bool ctx::IsTexturePackIndexed(TexturePackFlags flag) const {
+        return m_TexturePackIndexMap.find(flag) != m_TexturePackIndexMap.end();
+    }
+
     bool ctx::_IndexTexturePack(TexturePackFlags flag) {
         try {
             const auto& fm = m_TexturePackFileMap.at(flag);
@@ -344,7 +530,21 @@ void main() {
                 uint32_t off = *(uint32_t*)fptr;
                 fptr += sizeof(uint32_t);
 
-                TexturePackResource res = { name, 0, size, wid, hig, static_cast<ResourceFormat>(form) };
+                TexturePackType type = GetType(m_TexturePackFileMap.at(flag));
+                char * origin =
+                    (type == TexturePackType::PERM)
+                    ? static_cast<char *> (GetPerm(m_TexturePackFileMap.at(flag)).GetMapView())
+                        : static_cast<char *>(GetTemp(m_TexturePackFileMap.at(flag)).GetMapView());
+
+                TexturePackResource res = {name,
+                                           origin,
+                                           0,
+                                           size,
+                                           wid,
+                                           hig,
+                                           static_cast<ResourceFormat>(form),
+                                           type};
+
                 res.Offset = blocks.empty() ? off : blocks.back().Offset + off;
 
                 auto it = m_TexturePackIndexMap.find(flag);
@@ -369,7 +569,8 @@ void main() {
 
         return true;
     }
-    bool ctx::DumpTexturePack(TexturePackFlags flag, OutputFlags format_flag) {
+    bool ctx::DumpTexturePack(TexturePackFlags flag, DumpFormatFlags format_flag,
+                              DumpCompressionFlags compression_flag) {
         std::filesystem::path out_dir = m_PathPrefix / FlagToBasename.at(flag);
         if (std::filesystem::exists(out_dir)) {
             std::cout << "Error out dir (" << out_dir.generic_string() << ")" << " already exists!" << std::endl;
@@ -387,47 +588,7 @@ void main() {
                 std::filesystem::path file_path_dds = out_dir / (res.Name + ".dds");
 
                 if (res.Format != ResourceFormat::A8R8G8B8) {
-                    std::stringstream bytestream;
-                    unsigned char data1[] = { 0x44, 0x44, 0x53, 0x20, 0x7C, 0x00,
-                                            0x00, 0x00, 0x07, 0x10, 0x08, 0x00 };
-                    size_t data1_size = sizeof(data1) / sizeof(data1[0]);
-
-                    bytestream.write((const char*)data1, data1_size);
-                    bytestream.write(reinterpret_cast<const char*>(&res.Height), sizeof(res.Height));
-                    bytestream.write(reinterpret_cast<const char*>(&res.Width), sizeof(res.Width));
-
-                    uint32_t dw = 0x0400;
-                    bytestream.write(reinterpret_cast<const char*>(&dw), sizeof(dw));
-
-                    unsigned char data2[] = {
-                        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                        0x00, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00,
-                        0x44, 0x58, 0x54 };
-                    size_t data2_size = sizeof(data2) / sizeof(data2[0]);
-                    bytestream.write((const char*)data2, data2_size);
-
-                    unsigned char b = 0x00;
-                    if (res.Format == ResourceFormat::DXT1) {
-                        b = 0x31;
-                    }
-                    else if (res.Format == ResourceFormat::DXT3) {
-                        b = 0x33;
-                    }
-                    else if (res.Format == ResourceFormat::DXT5) {
-                        b = 0x35;
-                    }
-                    bytestream.write(reinterpret_cast<const char*>(&b), sizeof(b));
-
-                    unsigned char data3[] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                                0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00,
-                                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-                    size_t data3_size = sizeof(data3) / sizeof(data3[0]);
-                    bytestream.write((const char*)data3, data3_size);
+                    auto bytestream = BuildDDSHeaderForResource(res);
 
                     TexturePackType type = GetType(m_TexturePackFileMap.at(flag));
                     LPVOID lpMap = NULL;
@@ -446,15 +607,22 @@ void main() {
                         char* fptr = static_cast<char*>(lpMap);
                         char* start = fptr + res.Offset;
 
-                        if (format_flag == OutputFlags::NativeFormat) {
-                            std::ofstream file(file_path_dds, std::ios::binary);
-                            if (file) {
-                                bytestream.write((const char*)start, res.Size);
-                                file.write((const char*)bytestream.str().c_str(), 128 + res.Size);
-                                file.close();
-                            }
+                        if ((format_flag == DumpFormatFlags::Native) || (!m_ClientHasWGLContext)) {
+                          FILE *pFile = nullptr;
+                          fopen_s(&pFile, file_path_dds.generic_string().c_str(), "wb");
+
+                          if (!pFile)
+                            continue;
+
+                          fwrite((const char *)bytestream.str().c_str(), 1, 128, pFile);
+                          fwrite((const char *)start, 1, res.Size, pFile);
+                          fclose(pFile);
                         }
                         else {
+                            HDC hdc = wglGetCurrentDC();
+                            HGLRC hrc = wglGetCurrentContext();
+
+                            wglMakeCurrent(m_hDC, m_hRC);
 
                             GLuint tex;
                             glGenTextures(1, &tex);
@@ -510,10 +678,10 @@ void main() {
                             glClear(GL_COLOR_BUFFER_BIT);
                             // Render a full-screen quad with the compressed texture bound here
                             // The decompressed image will be rendered into rgbTex
-                            GLint texLocation = glGetUniformLocation(this->program, "tex");
+                            GLint texLocation = glGetUniformLocation(m_OutputProgram, "tex");
 
                             // Bind your program
-                            glUseProgram(this->program);
+                            glUseProgram(m_OutputProgram);
 
                             // Bind your texture to texture unit 0
                             glActiveTexture(GL_TEXTURE0);
@@ -540,7 +708,9 @@ void main() {
 
                             fpng::fpng_encode_image_to_file(file_path_png.generic_string().c_str(),
                                 pixels.data(), res.Width, res.Height, 4,
-                                fpng::FPNG_FORCE_UNCOMPRESSED);
+                                fpng::FPNG_ENCODE_SLOWER);
+
+                            wglMakeCurrent(hdc, hrc);
                         }
                     }
 
@@ -563,13 +733,39 @@ void main() {
                         char* fptr = static_cast<char*>(lpMap);
                         char* start = fptr + res.Offset;
                         fpng::fpng_encode_image_to_file(file_path_png.generic_string().c_str(), start,
-                            res.Width, res.Height, 4,
-                            fpng::FPNG_FORCE_UNCOMPRESSED);
+                            res.Width, res.Height, 4, static_cast<uint32_t>(compression_flag));
                     }
                 }
             }
         }
         return true;
+    }
+    bool ctx::DeleteTexturePackDump(TexturePackFlags flag) {
+        std::filesystem::path out_dir = m_PathPrefix / FlagToBasename.at(flag);
+        if (!std::filesystem::exists(out_dir)) {
+            std::cout << "Error out dir (" << out_dir.generic_string() << ")"
+                      << " does not exist!" << std::endl;
+            return false;
+        } else {
+            std::filesystem::remove_all(out_dir);
+            std::cout << "Removed out dir (" << out_dir.generic_string() << ")"
+                      << "!" << std::endl;
+            return true;
+        }
+    }
+    std::vector<TexturePackResource> ctx::GetResourcesFromTexturePack(TexturePackFlags flag) const {
+        if (!(IsTexturePackMapped(flag) && IsTexturePackIndexed(flag)))
+            return std::vector<TexturePackResource>();
+        else {
+            std::vector<TexturePackResource> resources;
+            const auto &index = m_TexturePackIndexMap.at(flag);
+            for (const auto &entry : index) {
+                if (std::holds_alternative<TexturePackResource>(entry.second)) {
+                    resources.push_back(std::get<TexturePackResource>(entry.second));
+                }
+            }
+            return resources;
+        }
     }
 #pragma warning(pop)
 }

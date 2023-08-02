@@ -12,10 +12,10 @@ int main(int argc, char **argv) {
   while (g_ApplicationRunning) {
     mcctp::Application *app = new mcctp::Application();
     g_Instance = app;
-    // mcctp_CORE_TRACE("Initialized");
-    // mcctp_PROFILE_BEGIN_SESSION("Runtime", "mcctpProfile-Runtime.json");
+  //  // mcctp_CORE_TRACE("Initialized");
+  //  // mcctp_PROFILE_BEGIN_SESSION("Runtime", "mcctpProfile-Runtime.json");
     app->Run();
-    // mcctp_PROFILE_END_SESSION();
+  //  // mcctp_PROFILE_END_SESSION();
     delete app;
   }
 

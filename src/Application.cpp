@@ -146,9 +146,6 @@ void Application::Run() {
                                      ImGuiDockNodeFlags_PassthruCentralNode);
       }
 
-      // ImGui Demo
-      { ImGui::ShowDemoWindow(); }
-
       // App Layers
       {
         for (auto &layer : m_LayerStack)
