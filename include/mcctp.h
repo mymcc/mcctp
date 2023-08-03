@@ -118,6 +118,14 @@ enum class ResourceFormat {
     INVALID,
 };
 
+static const std::unordered_map<ResourceFormat, const char *> ResourceFormatToString{
+    {ResourceFormat::A8R8G8B8, "ARGB"},
+    {ResourceFormat::DXT1, "DXT1"},
+    {ResourceFormat::DXT3, "DXT3"},
+    {ResourceFormat::DXT5, "DXT5"},
+    {ResourceFormat::INVALID, ""}
+};
+
 struct TexturePackBlock {
   size_t Key;
   size_t Size;
@@ -131,6 +139,12 @@ enum class TexturePackType {
     PERM, 
     TEMP, 
     INVALID 
+};
+
+static const std::unordered_map<TexturePackType, const char *> PackTypeToExt{
+    {TexturePackType::PERM, ".perm.bin"},
+    {TexturePackType::TEMP, ".temp.bin"},
+    {TexturePackType::INVALID, ""}
 };
 
 struct TexturePackResource {

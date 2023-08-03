@@ -1,9 +1,14 @@
 #include "mcctppch.h"
 #include "StreamedImage.h"
-
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
 extern HGLRC g_hRC;
-void DoTexturePackCheckbox(mcctp::TexturePackFlags texture_pack, bool* active);
+
+std::shared_ptr<mcctp::Image> LoadAppIcon(void);
+void DoTexturePackCheckbox(mcctp::TexturePackFlags texture_pack, bool *active);
 void DoAllTexturePackCheckboxes(void);
+std::pair<ImVec2, ImVec2> GetScreenFill(void);
+std::pair<ImVec2, ImVec2> GetScreenMaintainAspectRatio(uint32_t width, uint32_t height);
 
 mcctp::StreamedImage::StreamedImage(std::filesystem::path path) {
   m_TexturePacksPath = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
@@ -13,6 +18,27 @@ mcctp::StreamedImage::StreamedImage(std::filesystem::path path) {
   m_CompressionFlag = mcctp::DumpCompressionFlags::None;
 
   mcctp::Initialize(m_TexturePacksPath, mcctp::TexturePackFlags::All);
+
+  std::filesystem::path app_icon =
+      std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
+  app_icon += "\\res\\mcctp.png";
+
+  std::vector<uint8_t> data;
+  uint32_t w;
+  uint32_t h;
+  uint32_t channels = 4;
+  uint32_t desired_channels = 4;
+  // fpng::fpng_decode_file(app_icon.generic_string().c_str(), data, w, h, channels,
+  // desired_channels);
+
+  // Load from file
+  int image_width = 0;
+  int image_height = 0;
+  unsigned char *image_data =
+      stbi_load(app_icon.generic_string().c_str(), &image_width, &image_height, NULL, 4);
+  m_AppIcon = std::make_shared<mcctp::Image>(image_data, image_width, image_height, 4);
+  if (image_data != NULL)
+    stbi_image_free(image_data);
 }
 
 void mcctp::StreamedImage::OnAttach() {
@@ -22,6 +48,13 @@ void mcctp::StreamedImage::OnAttach() {
 void mcctp::StreamedImage::OnUpdate(float ts) {}
 
 void mcctp::StreamedImage::OnUIRender() {
+    
+    if (show_demo) {
+      ImGui::ShowDemoWindow();
+    }
+
+    DoMainMenuBar();
+
     ImGui::Begin("Instance Configuration");
 
     DoInstanceConfiguration();
@@ -35,10 +68,85 @@ void mcctp::StreamedImage::OnUIRender() {
 
     DoTextureViewer();
 
+    DoTextureInfo();
+}
+
+void mcctp::StreamedImage::DoMainMenuBar(void) {
+    auto& style = ImGui::GetStyle();
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(style.FramePadding.x,5 * style.FramePadding.y));
+    ImGui::BeginMainMenuBar();
+    ImGui::PopStyleVar();
+    m_AppIcon->Bind();
+    ImGui::Image((void *)(intptr_t)m_AppIcon->GetRendererID(), ImVec2(80, 50));
+    if (ImGui::BeginMenu("File")) {
+      ImGui::MenuItem("New");
+      ImGui::MenuItem("Create");
+      ImGui::EndMenu();
+    }
+    if (ImGui::BeginMenu("Edit")) {
+      ImGui::MenuItem("New");
+      ImGui::MenuItem("Create");
+      ImGui::EndMenu();
+    }
+    if (ImGui::BeginMenu("View")) {
+      if (ImGui::MenuItem("Show Demo")) {
+        show_demo = true;
+      }
+      ImGui::EndMenu();
+    }
+    if (ImGui::BeginMenu("Project")) {
+      ImGui::MenuItem("New");
+      ImGui::MenuItem("Create");
+      ImGui::EndMenu();
+    }
+    if (ImGui::BeginMenu("Window")) {
+      ImGui::MenuItem("New");
+      ImGui::MenuItem("Create");
+      ImGui::EndMenu();
+    }
+    if (ImGui::BeginMenu("Help")) {
+      ImGui::MenuItem("New");
+      ImGui::MenuItem("Create");
+      ImGui::EndMenu();
+    }
+    ImGui::EndMainMenuBar();
+    
+
+    ImGuiWindowFlags window_flags =
+        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_MenuBar;
+    float height = ImGui::GetFrameHeight();
+
+    if (ImGui::BeginViewportSideBar("##SecondaryMenuBar", NULL, ImGuiDir_Up, height,
+                                    window_flags)) {
+      if (ImGui::BeginMenuBar()) {
+        ImGui::Text("Happy secondary menu bar");
+        ImGui::EndMenuBar();
+      }
+    }
+    ImGui::End();
+
+    if (ImGui::BeginViewportSideBar("##TernaryMenuBar", NULL, ImGuiDir_Up, height,
+                                    window_flags)) {
+      if (ImGui::BeginMenuBar()) {
+        ImGui::Text("Happy ternary menu bar");
+        ImGui::EndMenuBar();
+      }
+    }
+    ImGui::End();
+
+    if (ImGui::BeginViewportSideBar("##MainStatusBar", NULL, ImGuiDir_Down, height, window_flags)) {
+      if (ImGui::BeginMenuBar()) {
+        ImGui::Text("Happy status bar");
+        ImGui::EndMenuBar();
+      }
+    }
+    ImGui::End();
+
 }
 
 void mcctp::StreamedImage::DoInstanceConfiguration(void) {
     ImGui::SeparatorText("Configuration");
+
     DoAllTexturePackCheckboxes();
 
     ImGui::SeparatorText("Modify Instance");
@@ -109,21 +217,30 @@ void mcctp::StreamedImage::DoTexturePackDumper(void) {
 
 void mcctp::StreamedImage::DoTextureViewer(void) { 
     ImGui::Begin("TextureViewer");
-    static unsigned int selected_thumbnail = 0;
     if (m_TextureThumbnails.size() != 0) {
       //auto texture = m_TextureThumbnails.at(selected_thumbnail);
       //ImGui::Image((ImTextureID)(intptr_t)texture->GetRendererID(),
       //             ImVec2(texture->GetWidth(), texture->GetHeight()));
+
       auto texture = m_TextureThumbnails.at(selected_thumbnail);
-      
-      ImGui::Image((ImTextureID)(intptr_t)texture->GetRendererID(),
-                   ImVec2(640, 360));
+      std::pair<ImVec2, ImVec2> window_coordinates;
+      window_coordinates =
+          (m_MaintainAspectRatio) ? GetScreenMaintainAspectRatio(texture->GetWidth(), texture->GetHeight()) : GetScreenFill();
+
+      //ImGui::Image((ImTextureID)(intptr_t)texture->GetRendererID(),
+      //             ImVec2(640, 360));
+      ImGui::GetWindowDrawList()->AddImage((void *)texture->GetRendererID(),
+                                           window_coordinates.first, window_coordinates.second,
+                                           ImVec2(0, 0), ImVec2(1, 1));
 
     } else {
       ImGui::Image(
             (ImTextureID)(intptr_t)0,
             ImVec2(640, 360));
     }
+    ImGui::End();
+
+    ImGui::Begin("Texture Explorer");
     ImGui::BeginGroup();
     ImGuiStyle &style = ImGui::GetStyle();
     float child_w = (ImGui::GetContentRegionAvail().x - 2 * style.ItemSpacing.x) / 6;
@@ -140,7 +257,6 @@ void mcctp::StreamedImage::DoTextureViewer(void) {
     static ImVec2 rect_pos{};
     static ImVec2 rect_size{};
     static bool needs_load = false;
-    static mcctp::TexturePackFlags selected_texture_pack = mcctp::TexturePackFlags::None;
     for (uint8_t i = 0; i < TexturePackCount; ++i) {
       TexturePackFlags flag = (TexturePackFlags)(1 << i);
       mcctp::ctx *inst = ctx::Instance();
@@ -185,11 +301,11 @@ void mcctp::StreamedImage::DoTextureViewer(void) {
       mcctp::ctx *inst = ctx::Instance();
       unsigned int texture_unit = 0;
       for (const auto &res : inst->GetResourcesFromTexturePack(selected_texture_pack)) {
-        auto thumbnail = std::make_shared<mcctp::Image>(res);
+        auto thumbnail = std::make_shared<mcctp::Image>((TexturePackResource)res);
 
-        thumbnail->Bind();
-        glActiveTexture(GL_TEXTURE0 + texture_unit);
-        thumbnail->Unbind();
+        //thumbnail->Bind();
+        //glActiveTexture(GL_TEXTURE0 + texture_unit);
+        //thumbnail->Unbind();
 
         m_TextureThumbnails.emplace_back(thumbnail);
         ++texture_unit;
@@ -226,6 +342,46 @@ void mcctp::StreamedImage::DoTextureViewer(void) {
     ImGui::End();
 }
 
+void mcctp::StreamedImage::DoTextureInfo(void) { 
+    ImGui::Begin("Texture Info");
+    if (m_TextureThumbnails.size() != 0) {
+      auto texture = m_TextureThumbnails.at(selected_thumbnail);
+      ImGui::SeparatorText(texture->GetName().c_str());
+      ImGui::Text("Texture Pack: %s", mcctp::FlagToBasename.at(selected_texture_pack));
+      ImGui::Text("Pack Type: %d", PackTypeToExt.at(texture->GetPackType()));
+      ImGui::Text("Width: %d", texture->GetWidth());
+      ImGui::Text("Height: %d", texture->GetHeight());
+      ImGui::Text("Size: %d", texture->GetSize());
+      ImGui::Text("Format: %d", ResourceFormatToString.at(texture->GetFormat()));
+      ImGui::Text("Origin: %p", (void *)texture->GetOrigin());
+      ImGui::Text("Offset: %p", (void *)(texture->GetOrigin() + texture->GetOffset()));
+      
+    }
+    ImGui::End();
+}
+
+std::shared_ptr<mcctp::Image> LoadAppIcon(void) {
+    std::filesystem::path app_icon = 
+        std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
+    app_icon += "/res/mcctp.png";
+
+    std::vector<uint8_t> data;
+    uint32_t w;
+    uint32_t h;
+    uint32_t channels = 4;
+    uint32_t desired_channels = 4;
+    //fpng::fpng_decode_file(app_icon.generic_string().c_str(), data, w, h, channels, desired_channels);
+    
+    // Load from file
+    int image_width = 0;
+    int image_height = 0;
+    unsigned char *image_data =
+        stbi_load(app_icon.generic_string().c_str(), &image_width, &image_height, NULL, 4);
+    auto image = std::make_shared<mcctp::Image>(data, image_width, image_height, 4);
+    if (image_data != NULL) stbi_image_free(image_data);
+    return image;
+}
+
 void DoTexturePackCheckbox(mcctp::TexturePackFlags texture_pack, bool* active) {
     if (ImGui::Checkbox(mcctp::FlagToBasename.at(texture_pack), active)) {
       mcctp::TexturePackField field = mcctp::ctx::Instance()->GetField();
@@ -256,4 +412,40 @@ void DoAllTexturePackCheckboxes() {
           mcctp::ctx::Instance()->SetField(mcctp::TexturePackFlags::None);
       }
     }
+}
+
+std::pair<ImVec2, ImVec2> GetScreenFill(void) {
+    ImVec2 pos = ImGui::GetCursorScreenPos();
+    ImVec2 avail = ImGui::GetContentRegionAvail();
+
+    ImVec2 filled;
+    filled.x = pos.x + avail.x;
+    filled.y = pos.y + avail.y;
+
+    return {pos, filled};
+}
+
+std::pair<ImVec2, ImVec2> GetScreenMaintainAspectRatio(uint32_t width, uint32_t height) {
+    ImVec2 pos = ImGui::GetCursorScreenPos();
+    ImVec2 avail = ImGui::GetContentRegionAvail();
+
+    ImVec2 aspected = avail;
+    float aspect_ratio = (float)width / (float)height;
+
+    aspected.y = aspected.x / aspect_ratio;
+    float yOff = (avail.y - aspected.y) / 2;
+    if (yOff >= 0.0f) {
+      pos.y += yOff;
+    } else {
+      aspected = avail;
+      aspected.x = aspected.y * aspect_ratio;
+      float xOff = (avail.x - aspected.x) / 2;
+      if (xOff >= 0.0f) {
+        pos.x += xOff;
+      }
+    }
+    aspected.x += pos.x;
+    aspected.y += pos.y;
+
+    return {pos, aspected};
 }

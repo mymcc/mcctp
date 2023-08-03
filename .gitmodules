@@ -11,3 +11,6 @@
 	path = external/glew
 	url = https://github.com/Stehfyn/glew
 	ignore = dirty
+[submodule "external/stb"]
+	path = external/stb
+	url = https://github.com/nothings/stb

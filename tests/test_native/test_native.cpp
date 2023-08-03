@@ -26,7 +26,7 @@ int main(int argc, char** argv) {
 	// Dump texture packs
 	const auto dump_format_flags = mcctp::DumpFormatFlags::Native;
 	const auto compression_flags = mcctp::DumpCompressionFlags::None;
-	ok = mcctp::DumpTexturePacks();
+	ok = mcctp::DumpTexturePacks(dump_format_flags, compression_flags);
 	if (!ok) ExitWithError("Error on DumpTexturePacks()", -1);
 
 	return 0;

@@ -4,6 +4,7 @@ IncludeDir["mcctp"]  = "../include"
 IncludeDir["imgui"]  = "../external/imgui"
 IncludeDir["fpng"] = "../external/fpng/src"
 IncludeDir["GLEW"] = "../external/glew/include"
+IncludeDir["stb"] = "../external/stb"
 
 LibraryDir = {}
 

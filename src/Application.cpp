@@ -216,6 +216,7 @@ void Application::Init() {
     platform_io.Renderer_SwapBuffers = Hook_Renderer_SwapBuffers;
     platform_io.Platform_RenderWindow = Hook_Platform_RenderWindow;
   }
+
   ImFontConfig fontConfig;
   fontConfig.FontDataOwnedByAtlas = false;
   // ImFont* robotoFont = io.Fonts->AddFontFromMemoryTTF((void*)g_RobotoRegular,

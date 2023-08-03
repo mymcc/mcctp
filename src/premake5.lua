@@ -22,6 +22,7 @@ project "mcctp-example"
         "%{IncludeDir.imgui}",
         "%{IncludeDir.fpng}",
         "%{IncludeDir.GLEW}",
+        "%{IncludeDir.stb}",
     }
 
     links

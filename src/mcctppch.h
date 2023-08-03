@@ -17,6 +17,8 @@ struct WGL_WindowData { HDC hDC; };
 #include "backends/imgui_impl_opengl3.h"
 #include "backends/imgui_impl_win32.h"
 
+#include "stb_image.h"
+
 #include <locale>
 #include <codecvt>
 #pragma warning( disable : 4996 )
