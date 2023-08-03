@@ -9,6 +9,7 @@ void DoTexturePackCheckbox(mcctp::TexturePackFlags texture_pack, bool *active);
 void DoAllTexturePackCheckboxes(void);
 std::pair<ImVec2, ImVec2> GetScreenFill(void);
 std::pair<ImVec2, ImVec2> GetScreenMaintainAspectRatio(uint32_t width, uint32_t height);
+std::pair<ImVec2, ImVec2> GetItemRectMaintainAspectRatio(uint32_t width, uint32_t height, ImVec2 item_extents);
 
 mcctp::StreamedImage::StreamedImage(std::filesystem::path path) {
   m_TexturePacksPath = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
@@ -55,6 +56,7 @@ void mcctp::StreamedImage::OnUIRender() {
 
     DoMainMenuBar();
 
+    
     ImGui::Begin("Instance Configuration");
 
     DoInstanceConfiguration();
@@ -216,7 +218,9 @@ void mcctp::StreamedImage::DoTexturePackDumper(void) {
 }
 
 void mcctp::StreamedImage::DoTextureViewer(void) { 
-    ImGui::Begin("TextureViewer");
+    ImGui::Begin("Texture Viewer");
+    static float scale = 1.0f;
+    ImGui::SliderFloat("Scale", &scale, 1.0f, 20.0f);
     if (m_TextureThumbnails.size() != 0) {
       //auto texture = m_TextureThumbnails.at(selected_thumbnail);
       //ImGui::Image((ImTextureID)(intptr_t)texture->GetRendererID(),
@@ -229,28 +233,50 @@ void mcctp::StreamedImage::DoTextureViewer(void) {
 
       //ImGui::Image((ImTextureID)(intptr_t)texture->GetRendererID(),
       //             ImVec2(640, 360));
+      float w = (window_coordinates.second.x - window_coordinates.first.x);
+      float h = (window_coordinates.second.y - window_coordinates.first.y);
+      float xx = ((w * scale) - w) / 2.0f;
+      float yy = ((h * scale) - h) / 2.0f;
+      window_coordinates.first.x -= xx;
+      window_coordinates.second.x += xx;
+      window_coordinates.first.y -= yy;
+      window_coordinates.second.y += yy;
+
+      ImVec2 strt = ImGui::GetCursorPos();
+      ImVec2 rect = ImGui::GetContentRegionAvail();
+      ImVec2 end(ImGui::GetWindowSize());
+      ImVec2 spos = ImGui::GetCursorScreenPos();
+      rect.x += spos.x;
+      rect.y += spos.y;
+      ImGui::GetWindowDrawList()->AddRect(spos, rect, ImGui::GetColorU32(ImVec4(0.3f, 0.3f, 0.7f, 1.0f)));
+      ImGui::GetWindowDrawList()->PushClipRect(spos, rect, false);
       ImGui::GetWindowDrawList()->AddImage((void *)texture->GetRendererID(),
                                            window_coordinates.first, window_coordinates.second,
-                                           ImVec2(0, 0), ImVec2(1, 1));
+          ImVec2(0 ,0), ImVec2(1, 1));
+      //ImVec2(0 - (1 - scale), 0 - (1 - scale)), ImVec2(1 + (1 - scale), 1 + (1 - scale)));
+      ImGui::GetWindowDrawList()->PopClipRect();
 
     } else {
       ImGui::Image(
             (ImTextureID)(intptr_t)0,
             ImVec2(640, 360));
     }
+
     ImGui::End();
 
     ImGui::Begin("Texture Explorer");
     ImGui::BeginGroup();
     ImGuiStyle &style = ImGui::GetStyle();
+    
     float child_w = (ImGui::GetContentRegionAvail().x - 2 * style.ItemSpacing.x) / 6;
     if (child_w < 1.0f)
       child_w = 1.0f;
+    child_w = ImGui::CalcTextSize("mainmenuandcampaigntexturepack").x + style.ScrollbarSize + (2 * style.WindowPadding.x);
     const ImGuiWindowFlags child_flags = ImGuiWindowFlags_MenuBar;
     ImGuiID child_id = ImGui::GetID((void *)(intptr_t)0);
-    bool child_is_visible = ImGui::BeginChild(child_id, ImVec2(child_w, 300.0f), true, child_flags);
+    bool child_is_visible = ImGui::BeginChild(child_id, ImVec2(child_w, ImGui::GetContentRegionAvail().y), true, child_flags);
     if (ImGui::BeginMenuBar()) {
-      ImGui::TextUnformatted("TexturePacks");
+      ImGui::TextUnformatted("Texture Packs");
       ImGui::EndMenuBar();
     }
 
@@ -291,7 +317,7 @@ void mcctp::StreamedImage::DoTextureViewer(void) {
     if (child_w < 1.0f)
       child_w = 1.0f;
     child_id = ImGui::GetID((void *)(intptr_t)1);
-    child_is_visible = ImGui::BeginChild(child_id, ImVec2(child_w, 300.0f), true, child_flags);
+    child_is_visible = ImGui::BeginChild(child_id, ImVec2(child_w, ImGui::GetContentRegionAvail().y), true, child_flags);
     if (ImGui::BeginMenuBar()) {
       ImGui::TextUnformatted("Textures");
       ImGui::EndMenuBar();
@@ -323,13 +349,17 @@ void mcctp::StreamedImage::DoTextureViewer(void) {
 
     for (int n = 0; n < buttons_count; ++n) {
       ImGui::PushID(n);
+      auto text = m_TextureThumbnails.at(n);
       ImVec2 start = ImGui::GetCursorScreenPos();
-      glBindTexture(GL_TEXTURE_2D, m_TextureThumbnails.at(n)->GetRendererID());
-      if (ImGui::ImageButton((void *)(intptr_t)m_TextureThumbnails.at(n)->GetRendererID(),
-                             button_sz))
+      glBindTexture(GL_TEXTURE_2D, text->GetRendererID());
+      //if (ImGui::ImageButton((void *)(intptr_t)m_TextureThumbnails.at(n)->GetRendererID(),
+      //                       button_sz, ImVec2(), ImVec2()))
+      auto wc = GetItemRectMaintainAspectRatio(text->GetWidth(), text->GetHeight(), button_sz);
+      if (ImGui::Button("", button_sz))
       {
         selected_thumbnail = n;
       }
+      ImGui::GetWindowDrawList()->AddImage((void*)text->GetRendererID(), wc.first, wc.second, ImVec2(0, 0), ImVec2(1, 1));
       float last_button_x2 = ImGui::GetItemRectMax().x;
       float next_button_x2 = last_button_x2 + style1.ItemSpacing.x +
                              button_sz.x; // Expected position if next button was on same line
@@ -448,4 +478,29 @@ std::pair<ImVec2, ImVec2> GetScreenMaintainAspectRatio(uint32_t width, uint32_t 
     aspected.y += pos.y;
 
     return {pos, aspected};
+}
+std::pair<ImVec2, ImVec2> GetItemRectMaintainAspectRatio(uint32_t width, uint32_t height, ImVec2 item_extents) {
+    ImVec2 pos = ImGui::GetCursorScreenPos();
+    ImVec2 avail = item_extents;
+
+    ImVec2 aspected = avail;
+    float aspect_ratio = (float)width / (float)height;
+
+    aspected.y = aspected.x / aspect_ratio;
+    float yOff = (avail.y - aspected.y) / 2;
+    if (yOff >= 0.0f) {
+        pos.y += yOff;
+    }
+    else {
+        aspected = avail;
+        aspected.x = aspected.y * aspect_ratio;
+        float xOff = (avail.x - aspected.x) / 2;
+        if (xOff >= 0.0f) {
+            pos.x += xOff;
+        }
+    }
+    aspected.x += pos.x;
+    aspected.y += pos.y;
+
+    return { pos, aspected };
 }
