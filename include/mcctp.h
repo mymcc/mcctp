@@ -17,6 +17,7 @@
 #include <fstream>
 #include <tuple>
 #include <memory>
+#include <assert.h>
 
 #include <codecvt>
 #include <locale>
@@ -87,6 +88,26 @@ static const std::unordered_map<TexturePackFlags, const char *> FlagToBasename{
     {TexturePackFlags::Medals, "medalstexturepack"},
     {TexturePackFlags::Skulls, "skullstexturepack"},
     {TexturePackFlags::SPMapPreview, "spmappreviewtexturepack"},
+    {TexturePackFlags::All, "all"},
+    {TexturePackFlags::None, "none"},
+};
+
+static const std::unordered_map<std::string, TexturePackFlags> BasenameToFlag{
+    { "controllertexturepack", TexturePackFlags::Controller},
+    { "emblemstexturepack", TexturePackFlags::Emblems },
+    { "globaluitexturepack", TexturePackFlags::GlobalUI },
+    { "hoppertexturepack", TexturePackFlags::Hopper },
+    { "ingamechapterpack", TexturePackFlags::InGameChapter },
+    { "largeavatartexturepack", TexturePackFlags::LargeAvatar },
+    { "levelstexturepack", TexturePackFlags::Levels },
+    { "loadingtexturepack", TexturePackFlags::Loading },
+    { "mainmenuandcampaigntexturepack", TexturePackFlags::MainMenuAndCampaign },
+    { "mainmenutexturepack", TexturePackFlags::MainMenu },
+    { "medalstexturepack", TexturePackFlags::Medals },
+    { "skullstexturepack", TexturePackFlags::Skulls },
+    { "spmappreviewtexturepack", TexturePackFlags::SPMapPreview },
+    { "all", TexturePackFlags::All },
+    { "none", TexturePackFlags::None },
 };
 
 enum class ResourceFormat {

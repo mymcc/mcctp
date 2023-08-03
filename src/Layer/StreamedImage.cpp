@@ -1,6 +1,7 @@
 #include "mcctppch.h"
 #include "StreamedImage.h"
 
+extern HGLRC g_hRC;
 void DoTexturePackCheckbox(mcctp::TexturePackFlags texture_pack, bool* active);
 void DoAllTexturePackCheckboxes(void);
 
@@ -24,10 +25,16 @@ void mcctp::StreamedImage::OnUIRender() {
     ImGui::Begin("Instance Configuration");
 
     DoInstanceConfiguration();
-    DoTexturePackDumper(); 
-    DoTextureViewer();
+    DoTexturePackDumper();
+
+    GLint texture_count;
+    glGetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, &texture_count);
+    ImGui::Text(std::to_string(texture_count).c_str());
 
     ImGui::End();
+
+    DoTextureViewer();
+
 }
 
 void mcctp::StreamedImage::DoInstanceConfiguration(void) {
@@ -104,9 +111,14 @@ void mcctp::StreamedImage::DoTextureViewer(void) {
     ImGui::Begin("TextureViewer");
     static unsigned int selected_thumbnail = 0;
     if (m_TextureThumbnails.size() != 0) {
+      //auto texture = m_TextureThumbnails.at(selected_thumbnail);
+      //ImGui::Image((ImTextureID)(intptr_t)texture->GetRendererID(),
+      //             ImVec2(texture->GetWidth(), texture->GetHeight()));
       auto texture = m_TextureThumbnails.at(selected_thumbnail);
+      
       ImGui::Image((ImTextureID)(intptr_t)texture->GetRendererID(),
-                   ImVec2(texture->GetWidth(), texture->GetHeight()));
+                   ImVec2(640, 360));
+
     } else {
       ImGui::Image(
             (ImTextureID)(intptr_t)0,
@@ -125,12 +137,16 @@ void mcctp::StreamedImage::DoTextureViewer(void) {
       ImGui::EndMenuBar();
     }
 
+    static ImVec2 rect_pos{};
+    static ImVec2 rect_size{};
     static bool needs_load = false;
     static mcctp::TexturePackFlags selected_texture_pack = mcctp::TexturePackFlags::None;
     for (uint8_t i = 0; i < TexturePackCount; ++i) {
       TexturePackFlags flag = (TexturePackFlags)(1 << i);
       mcctp::ctx *inst = ctx::Instance();
       if (inst->IsTexturePackMapped(flag) && inst->IsTexturePackIndexed(flag)) {
+        ImVec2 last_rect_pos = ImGui::GetCursorScreenPos();
+        ImVec2 last_rect_size = ImGui::GetItemRectSize();
         if (ImGui::Selectable(mcctp::FlagToBasename.at(flag))) {
           if (flag != selected_texture_pack) {
             for (auto &thumbnail : m_TextureThumbnails) {
@@ -138,13 +154,20 @@ void mcctp::StreamedImage::DoTextureViewer(void) {
             }
             m_TextureThumbnails.clear();
             selected_thumbnail = 0;
-
+            rect_pos = last_rect_pos;
+            rect_size = last_rect_size;
             needs_load = true;
           }
           selected_texture_pack = flag;
         }
       }
     }
+    
+    ImU32 col = ImColor(ImGui::GetStyle().Colors[ImGuiCol_HeaderHovered]);
+    ImGui::RenderFrame(
+        rect_pos, ImVec2(rect_pos.x + ImGui::GetContentRegionMax().x, rect_pos.y + ImGui::GetTextLineHeight()),
+        col, false);
+
     ImGui::EndChild();
 
     ImGui::SameLine();
@@ -152,7 +175,7 @@ void mcctp::StreamedImage::DoTextureViewer(void) {
     if (child_w < 1.0f)
       child_w = 1.0f;
     child_id = ImGui::GetID((void *)(intptr_t)1);
-    child_is_visible = ImGui::BeginChild(child_id, ImVec2(child_w, 200.0f), true, child_flags);
+    child_is_visible = ImGui::BeginChild(child_id, ImVec2(child_w, 300.0f), true, child_flags);
     if (ImGui::BeginMenuBar()) {
       ImGui::TextUnformatted("Textures");
       ImGui::EndMenuBar();
@@ -160,14 +183,21 @@ void mcctp::StreamedImage::DoTextureViewer(void) {
 
     if ((selected_texture_pack != mcctp::TexturePackFlags::None) && needs_load) {
       mcctp::ctx *inst = ctx::Instance();
+      unsigned int texture_unit = 0;
       for (const auto &res : inst->GetResourcesFromTexturePack(selected_texture_pack)) {
         auto thumbnail = std::make_shared<mcctp::Image>(res);
+
+        thumbnail->Bind();
+        glActiveTexture(GL_TEXTURE0 + texture_unit);
+        thumbnail->Unbind();
+
         m_TextureThumbnails.emplace_back(thumbnail);
+        ++texture_unit;
       }
       needs_load = false;
     }
 
-    int max_textures = 30;
+    int max_textures = 160;
     int buttons_count = (m_TextureThumbnails.size() == 0)      ? 0
                         : (m_TextureThumbnails.size() < max_textures) ? m_TextureThumbnails.size()
                                                                : max_textures;

@@ -1,10 +1,9 @@
 @echo off
-setlocal
+setlocal enabledelayedexpansion
 
 set root="%~dp0..\"
 pushd %root%
 
-setlocal enabledelayedexpansion
 set texturePackPath=ui\texturepacks
 set zipExe=external\7z2201-x64\Files\7-Zip\7z.exe
 

@@ -1,7 +1,7 @@
 @echo off
 setlocal enabledelayedexpansion
 
-set root=%~dp0..
+set root="%~dp0..\"
 pushd %root%
 
 rem Visual Studio Solution Files
@@ -15,9 +15,12 @@ del /q /f /s "external\imgui\imgui.vcxproj"
 del /q /f /s "external\imgui\imgui.vcxproj.filters"
 del /q /f /s "external\glew\glew.vcxproj"
 del /q /f /s "external\glew\glew.vcxproj.filters"
+del /q /f /s "tests\test_native\*.vcxproj"
+del /q /f /s "tests\test_native\*.vcxproj.user"
 
 rem Visual Studio Solution Folders and Binaries
 for %%G in (
+    .pytest_cache
     .vs 
     bin 
     bin-int 
@@ -27,9 +30,11 @@ for %%G in (
     external\imgui\bin-int 
     external\glew\bin
     external\glew\bin-int
+    tests\bin
+    tests\bin-int
 ) do (
     set "target=%%G"
-    rmdir /s /q !target! >nul 2>&1 && (echo Removed folder - %root%\!target!) || (echo Could Not Find %root%\!target!)
+    rmdir /s /q !target! >nul 2>&1 && (echo Removed folder - %root%!target!) || (echo Could Not Find %root%!target!)
 )
 
 echo %cmdcmdline%|find /i """%~f0""">nul && (

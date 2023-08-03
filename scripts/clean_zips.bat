@@ -1,5 +1,4 @@
 @echo off
-setlocal
 setlocal enabledelayedexpansion
 
 set root="%~dp0..\"

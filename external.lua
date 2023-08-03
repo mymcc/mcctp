@@ -13,6 +13,10 @@ group "external"
    include "external/GLEW"
 group ""
 
+group "tests"
+   include "tests/test_native"
+group ""
+
 group "core"
    include "src/"
    include "include/"

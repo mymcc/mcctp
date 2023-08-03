@@ -13,6 +13,7 @@ bin-int/
 **.log
 **.bin
 **.idx
+**.pyc
 
 # Deps
 external/cache/*

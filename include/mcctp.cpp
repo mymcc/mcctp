@@ -1,5 +1,5 @@
 #include "mcctp.h"
-
+#include <system_error>
 namespace mcctp {
 	namespace {
 #pragma warning(push)
@@ -145,7 +145,13 @@ void main() {
 
     bool ShareWithWGLContext(HGLRC hrc) {
         auto *inst = ctx::Instance();
-        return inst->ShareWithWGLContext(hrc);
+        bool res = inst->ShareWithWGLContext(hrc);
+        if (!res) {
+            MessageBox(NULL, std::to_wstring(GetLastError()).c_str(), L"", MB_OK);
+            return false;
+        } else {
+            return true;
+        }
     }
 
     std::stringstream BuildDDSHeaderForResource(TexturePackResource res) {
@@ -222,58 +228,73 @@ void main() {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
         glGenerateMipmap(GL_TEXTURE_2D);
         // Create a new texture to store the decompressed image
-        GLuint rgbaTex;
-        glGenTextures(1, &rgbaTex);
-        glBindTexture(GL_TEXTURE_2D, rgbaTex);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, res.Width, res.Height, 0, GL_RGBA, GL_UNSIGNED_BYTE,
-                     NULL);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-        // Create a framebuffer object (FBO) and attach the decompressed texture to it
-        GLuint fbo;
-        glGenFramebuffers(1, &fbo);
-        glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, rgbaTex, 0);
-
-        // Check FBO status
-        GLenum fboStatus = glCheckFramebufferStatus(GL_FRAMEBUFFER);
-        if (fboStatus != GL_FRAMEBUFFER_COMPLETE) {
-            // Handle error
-        }
-        glViewport(0, 0, res.Width, res.Height);
-        glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
-        // Render a full-screen quad with the compressed texture bound here
-        // The decompressed image will be rendered into rgbTex
-        GLint texLocation = glGetUniformLocation(m_OutputProgram, "tex");
-
-        // Bind your program
-        glUseProgram(m_OutputProgram);
-
-        // Bind your texture to texture unit 0
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, tex);
-
-        // Set the 'tex' uniform to texture unit 0
-        glUniform1i(texLocation, 0);
-
-        // Render the fullscreen quad
-        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        glBindTexture(GL_TEXTURE_2D, 0);
-        glDeleteTextures(1, &rgbaTex);
-        glDeleteTextures(1, &tex);
-        glDeleteFramebuffers(1, &fbo);
+        //GLuint rgbaTex;
+        //glGenTextures(1, &rgbaTex);
+        //glBindTexture(GL_TEXTURE_2D, rgbaTex);
+        //glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, res.Width, res.Height, 0, GL_RGBA, GL_UNSIGNED_BYTE,
+        //             NULL);
+        //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        //
+        //// Create a framebuffer object (FBO) and attach the decompressed texture to it
+        //GLuint fbo;
+        //glGenFramebuffers(1, &fbo);
+        //glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+        //glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, rgbaTex, 0);
+        //
+        //// Check FBO status
+        //GLenum fboStatus = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+        //if (fboStatus != GL_FRAMEBUFFER_COMPLETE) {
+        //    // Handle error
+        //}
+        //glViewport(0, 0, res.Width, res.Height);
+        //glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+        //glClear(GL_COLOR_BUFFER_BIT);
+        //// Render a full-screen quad with the compressed texture bound here
+        //// The decompressed image will be rendered into rgbTex
+        //GLint texLocation = glGetUniformLocation(m_OutputProgram, "tex");
+        //
+        //// Bind your program
+        //glUseProgram(m_OutputProgram);
+        //
+        //// Bind your texture to texture unit 0
+        //glActiveTexture(GL_TEXTURE0);
+        //glBindTexture(GL_TEXTURE_2D, tex);
+        //
+        //// Set the 'tex' uniform to texture unit 0
+        //glUniform1i(texLocation, 0);
+        //
+        //// Render the fullscreen quad
+        //glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+        //
+        //// Bind the FBO and read the pixels from the decompressed texture
+        ////glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+        ////std::vector<char> pixels(res.Width * res.Height * 4);
+        ////glReadPixels(0, 0, res.Width, res.Height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+        ////
+        ////GLuint sharedtex;
+        ////glGenTextures(1, &sharedtex);
+        ////glBindTexture(GL_TEXTURE_2D, sharedtex);
+        ////glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        ////glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        ////glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, res.Width, res.Height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+        ////glBindTexture(GL_TEXTURE_2D, 0);
+        //
+        //glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        //glBindTexture(GL_TEXTURE_2D, 0);
+        ////glDeleteTextures(1, &rgbaTex);
+        //glDeleteTextures(1, &tex);
+        //glDeleteFramebuffers(1, &fbo);
 
         wglMakeCurrent(hdc, hrc);
 
-        return rgbaTex;
+        return tex;
     }
 
-    bool ctx::ShareWithWGLContext(HGLRC hrc) {
-        return wglShareLists(hrc, m_hRC); 
+    bool ctx::ShareWithWGLContext(HGLRC hrc) { 
+        wglMakeCurrent(NULL, NULL);
+        bool res = wglShareLists(hrc, m_hRC);
+        return res;
     }
 
     FileMapping::FileMapping(std::wstring path) {
@@ -390,7 +411,8 @@ void main() {
 
         m_hDC = hdc;
         m_hRC = wglCreateContext(m_hDC);
-        wglMakeCurrent(m_hDC, m_hRC);
+        assert(wglShareLists(hrc, m_hRC) == true);
+        bool result = wglMakeCurrent(m_hDC, m_hRC);
 
         m_OutputVertexShader = CompileShader(GL_VERTEX_SHADER, s_DefaultVertexShaderSrc);
         m_OutputFragmentShader = CompileShader(GL_FRAGMENT_SHADER, s_DefaultFragmentShaderSrc);
@@ -399,7 +421,7 @@ void main() {
         glDeleteShader(m_OutputVertexShader);
         glDeleteShader(m_OutputFragmentShader);
 
-        wglMakeCurrent(hdc, hrc);
+        result = wglMakeCurrent(hdc, hrc);
     }
 
     bool ctx::MemoryMapTexturePack(TexturePackFlags flag, std::wstring texture_pack_basename) {

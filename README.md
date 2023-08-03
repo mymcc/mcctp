@@ -9,6 +9,7 @@
 <div align="center">
   <span>
     <img src="https://github.com/Stehfyn/mcctp/actions/workflows/msbuild.yml/badge.svg" alt="Build">
+    <img src="https://github.com/Stehfyn/mcctp/actions/workflows/tests.yml/badge.svg" alt="Tests">
   </span>
 </div>
 <p align="center">
