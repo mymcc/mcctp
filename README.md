@@ -1,7 +1,7 @@
 <h1>
   <div style="display: inline-block">
     <div align="center">
-      <img src="res/OPTIONSCAREERLOADOUTICON_SKINS.png?raw=true" width="20%" height="20%" alt="tp">
+      <img src="res/mcctp.png?raw=true" width="20%" height="20%" alt="tp">
       <span>MCC Texture Pack Lib &nbsp &nbsp &nbsp &nbsp &nbsp &nbsp &nbsp &nbsp &nbsp &nbsp </span>
     </div>
   </div>
@@ -13,7 +13,7 @@
   </span>
 </div>
 <p align="center">
-<img align="center" width="75%" height="75%" src="res/Screenshot-2023-08-02-022645.png">
+<img align="center" width="75%" height="75%" src="res/Screenshot-2023-08-03-000034.png">
 </p>
 
 ## Features
