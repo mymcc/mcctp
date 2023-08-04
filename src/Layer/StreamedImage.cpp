@@ -10,6 +10,7 @@ void DoAllTexturePackCheckboxes(void);
 std::pair<ImVec2, ImVec2> GetScreenFill(void);
 std::pair<ImVec2, ImVec2> GetScreenMaintainAspectRatio(uint32_t width, uint32_t height);
 std::pair<ImVec2, ImVec2> GetItemRectMaintainAspectRatio(uint32_t width, uint32_t height, ImVec2 item_extents);
+void SortResources(std::vector<mcctp::TexturePackResource> &resources);
 
 mcctp::StreamedImage::StreamedImage(std::filesystem::path path) {
   m_TexturePacksPath = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
@@ -289,7 +290,7 @@ void mcctp::StreamedImage::DoTextureViewer(void) {
       if (inst->IsTexturePackMapped(flag) && inst->IsTexturePackIndexed(flag)) {
         ImVec2 last_rect_pos = ImGui::GetCursorScreenPos();
         ImVec2 last_rect_size = ImGui::GetItemRectSize();
-        if (ImGui::Selectable(mcctp::FlagToBasename.at(flag))) {
+        if (ImGui::Selectable(mcctp::FlagToBasename.at(flag).c_str())) {
           if (flag != selected_texture_pack) {
             for (auto &thumbnail : m_TextureThumbnails) {
               thumbnail.reset();
@@ -326,7 +327,10 @@ void mcctp::StreamedImage::DoTextureViewer(void) {
     if ((selected_texture_pack != mcctp::TexturePackFlags::None) && needs_load) {
       mcctp::ctx *inst = ctx::Instance();
       unsigned int texture_unit = 0;
-      for (const auto &res : inst->GetResourcesFromTexturePack(selected_texture_pack)) {
+      std::vector<TexturePackResource> resources =
+          inst->GetResourcesFromTexturePack(selected_texture_pack);
+      SortResources(resources);
+      for (const auto &res : resources) {
         auto thumbnail = std::make_shared<mcctp::Image>((TexturePackResource)res);
 
         //thumbnail->Bind();
@@ -377,15 +381,14 @@ void mcctp::StreamedImage::DoTextureInfo(void) {
     if (m_TextureThumbnails.size() != 0) {
       auto texture = m_TextureThumbnails.at(selected_thumbnail);
       ImGui::SeparatorText(texture->GetName().c_str());
-      ImGui::Text("Texture Pack: %s", mcctp::FlagToBasename.at(selected_texture_pack));
-      ImGui::Text("Pack Type: %d", PackTypeToExt.at(texture->GetPackType()));
+      ImGui::Text("Texture Pack: %s", mcctp::FlagToBasename.at(selected_texture_pack).c_str());
+      ImGui::Text("Pack Type: %s", PackTypeToExt.at(texture->GetPackType()).c_str());
       ImGui::Text("Width: %d", texture->GetWidth());
       ImGui::Text("Height: %d", texture->GetHeight());
       ImGui::Text("Size: %d", texture->GetSize());
-      ImGui::Text("Format: %d", ResourceFormatToString.at(texture->GetFormat()));
+      ImGui::Text("Format: %s", ResourceFormatToString.at(texture->GetFormat()).c_str());
       ImGui::Text("Origin: %p", (void *)texture->GetOrigin());
       ImGui::Text("Offset: %p", (void *)(texture->GetOrigin() + texture->GetOffset()));
-      
     }
     ImGui::End();
 }
@@ -413,7 +416,7 @@ std::shared_ptr<mcctp::Image> LoadAppIcon(void) {
 }
 
 void DoTexturePackCheckbox(mcctp::TexturePackFlags texture_pack, bool* active) {
-    if (ImGui::Checkbox(mcctp::FlagToBasename.at(texture_pack), active)) {
+    if (ImGui::Checkbox(mcctp::FlagToBasename.at(texture_pack).c_str(), active)) {
       mcctp::TexturePackField field = mcctp::ctx::Instance()->GetField();
       if (*active) {
         field.SetFlag(texture_pack);
@@ -503,4 +506,12 @@ std::pair<ImVec2, ImVec2> GetItemRectMaintainAspectRatio(uint32_t width, uint32_
     aspected.y += pos.y;
 
     return { pos, aspected };
+}
+
+void SortResources(std::vector<mcctp::TexturePackResource>& resources) {
+    std::sort(
+        resources.begin(), resources.end(),
+        [](const mcctp::TexturePackResource &a, const mcctp::TexturePackResource &b) { 
+            return a.Name < b.Name; 
+        });
 }

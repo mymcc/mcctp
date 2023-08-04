@@ -74,7 +74,7 @@ enum TexturePackFlags {
   None = 1 << 13,
 };
 
-static const std::unordered_map<TexturePackFlags, const char *> FlagToBasename{
+static const std::unordered_map<TexturePackFlags, std::string> FlagToBasename{
     {TexturePackFlags::Controller, "controllertexturepack"},
     {TexturePackFlags::Emblems, "emblemstexturepack"},
     {TexturePackFlags::GlobalUI, "globaluitexturepack"},
@@ -118,7 +118,7 @@ enum class ResourceFormat {
     INVALID,
 };
 
-static const std::unordered_map<ResourceFormat, const char *> ResourceFormatToString{
+static const std::unordered_map<ResourceFormat, std::string> ResourceFormatToString{
     {ResourceFormat::A8R8G8B8, "ARGB"},
     {ResourceFormat::DXT1, "DXT1"},
     {ResourceFormat::DXT3, "DXT3"},
@@ -141,7 +141,7 @@ enum class TexturePackType {
     INVALID 
 };
 
-static const std::unordered_map<TexturePackType, const char *> PackTypeToExt{
+static const std::unordered_map<TexturePackType, std::string> PackTypeToExt{
     {TexturePackType::PERM, ".perm.bin"},
     {TexturePackType::TEMP, ".temp.bin"},
     {TexturePackType::INVALID, ""}
