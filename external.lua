@@ -16,6 +16,7 @@ group ""
 
 group "tests"
    include "tests/test_native"
+   include "tests/test_patch"
 group ""
 
 group "core"

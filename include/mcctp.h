@@ -157,6 +157,7 @@ struct TexturePackResource {
   ResourceFormat Format;
   TexturePackType PackType;
 
+  bool Fits(const TexturePackResource &other);
   friend std::ostream& operator<<(std::ostream& os, const TexturePackResource& res);
 };
 
@@ -219,6 +220,9 @@ public:
                        DumpCompressionFlags compression_flag = DumpCompressionFlags::None);
   bool DeleteTexturePackDump(TexturePackFlags flag);
 
+  bool InjectAndWritePack(std::string src, std::string dst, TexturePackFlags flag);
+  TexturePackResource GetMappedResource(std::string res_name);
+  std::string GetTexturePackFilenameForResource(TexturePackResource res);
   std::vector<TexturePackResource> GetResourcesFromTexturePack(TexturePackFlags flag) const;
   GLuint RenderDDSToTexture(TexturePackResource res);
   bool ShareWithWGLContext(HGLRC hrc = wglGetCurrentContext());
@@ -253,6 +257,7 @@ bool DumpTexturePacks(DumpFormatFlags format_flag = DumpFormatFlags::Native,
 
 void ClearTexturePackDumps(void);
 
+bool InjectResource(std::string src, std::string dst, TexturePackFlags flag);
 std::stringstream BuildDDSHeaderForResource(TexturePackResource res);
 GLuint RenderDDSToTexture(TexturePackResource res);
 bool ShareWithWGLContext(HGLRC hrc = wglGetCurrentContext());

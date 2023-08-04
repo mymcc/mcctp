@@ -154,6 +154,11 @@ void main() {
         }
     }
 
+    bool InjectResource(std::string src, std::string dst, TexturePackFlags flag) { 
+        auto inst = ctx::Instance();
+        return inst->InjectAndWritePack(src, dst, flag);
+    }
+
     std::stringstream BuildDDSHeaderForResource(TexturePackResource res) {
         std::stringstream bytestream;
         unsigned char data1[] = {0x44, 0x44, 0x53, 0x20, 0x7C, 0x00,
@@ -775,6 +780,67 @@ void main() {
             return true;
         }
     }
+    bool ctx::InjectAndWritePack(std::string src, std::string dst, TexturePackFlags flag) {
+        TexturePackResource _src = GetMappedResource(src);
+        TexturePackResource _dst = GetMappedResource(dst);
+        
+        if (!(_dst.Fits(_src))) {
+            return false;
+        } else {
+            // Get src data
+            char *start = _src.Origin + _src.Offset;
+            std::vector<uint8_t> buffer(_src.Size);
+            std::memcpy(buffer.data(), start, _src.Size);
+
+            const auto &fm = m_TexturePackFileMap.at(flag);
+            size_t size = 0;
+            if (_dst.PackType == TexturePackType::PERM) {
+                size = GetFileSize(GetPerm(fm).GetFile(), NULL);
+            } else {
+                size = GetFileSize(GetTemp(fm).GetFile(), NULL);
+            }
+            // copy dst data
+            std::vector<uint8_t> new_bin_data(size);
+            std::memcpy(new_bin_data.data(), _dst.Origin, size);
+
+            //overwrite dst with src
+            char *dst_start = reinterpret_cast<char*>(new_bin_data.data()) + _dst.Offset;
+            std::memcpy(dst_start, buffer.data(), _src.Size);
+
+            // TODO: wrangle the tp name PS: ugh yur lib suxxxx!!!!!!!!!
+            // Write data to disk
+            std::ofstream new_bin(GetTexturePackFilenameForResource(_dst), std::ios::binary);
+            new_bin.write((const char *)new_bin_data.data(), size);
+            new_bin.close();
+        }
+        return true;
+    }
+    TexturePackResource ctx::GetMappedResource(std::string res_name) {
+        for (uint8_t i = 0; i < TexturePackCount; ++i) {
+            TexturePackFlags flag = (TexturePackFlags)(1 << i);
+            auto index = m_TexturePackIndexMap.find(flag);
+            if (index != m_TexturePackIndexMap.end()) {
+                auto it = index->second.find(res_name);
+                if (it != index->second.end()) {
+                    return std::get<TexturePackResource>(it->second);
+                }
+            }
+        }
+        return TexturePackResource();
+    }
+    std::string ctx::GetTexturePackFilenameForResource(TexturePackResource res) {
+        for (uint8_t i = 0; i < TexturePackCount; ++i) {
+            TexturePackFlags flag = (TexturePackFlags)(1 << i);
+            auto index = m_TexturePackIndexMap.find(flag);
+            if (index != m_TexturePackIndexMap.end()) {
+                auto it = index->second.find(res.Name);
+                if (it != index->second.end()) {
+                    return FlagToBasename.at(flag) + PackTypeToExt.at(res.PackType);
+                }
+            }
+        }
+        return std::string();
+    }
     std::vector<TexturePackResource> ctx::GetResourcesFromTexturePack(TexturePackFlags flag) const {
         if (!(IsTexturePackMapped(flag) && IsTexturePackIndexed(flag)))
             return std::vector<TexturePackResource>();
@@ -790,4 +856,8 @@ void main() {
         }
     }
 #pragma warning(pop)
-}
+    bool TexturePackResource::Fits(const TexturePackResource &other) {
+        return (Format == other.Format) && (Width == other.Width) &&
+               (Height == other.Height) && (Size == other.Size);
+    }
+    } // namespace mcctp
