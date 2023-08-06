@@ -18,6 +18,7 @@
 #include <tuple>
 #include <memory>
 #include <assert.h>
+#include <format>
 
 #include <codecvt>
 #include <locale>
@@ -28,17 +29,42 @@
 #include "fpng.h"
 
 namespace mcctp {
+enum class ResultType { Error, Warn, ok };
+
+struct Result {
+private:
+  ResultType Type;
+  std::string Msg;
+
+public:
+  Result() : Type(ResultType::Error), Msg("Not Implemented Error!") {}
+  Result(ResultType type, std::string msg) : Type(type), Msg(msg) {}
+  explicit operator bool() const { return Type == ResultType::ok; }
+  const ResultType &GetType(void) const { return Type; }
+  const std::string &what(void) const { return Msg; }
+};
+
+static const std::unordered_map<ResultType, std::string> ResultTypeToString {
+    {ResultType::Error, "Error"},
+    {ResultType::Warn, "Warn"},
+    {ResultType::ok, "Ok"},
+};
+
 struct FileMapping {
 private:
   HANDLE hFile = INVALID_HANDLE_VALUE;
   HANDLE hMap = NULL;
   LPVOID lpMap = NULL;
+  size_t Size = 0;
 
 public:
-  explicit FileMapping(std::wstring path);
+  explicit FileMapping(std::wstring path, 
+      uint64_t file_flags = GENERIC_READ|GENERIC_WRITE,
+      uint64_t page_flags = PAGE_READWRITE,
+      uint64_t view_flags = FILE_MAP_READ | FILE_MAP_WRITE);
 
-  FileMapping(FileMapping&& other) noexcept;
-  FileMapping& operator=(FileMapping&& other) noexcept;
+  FileMapping(FileMapping &&other) noexcept;
+  FileMapping &operator=(FileMapping &&other) noexcept;
 
   FileMapping(const FileMapping &) = delete;
   FileMapping &operator=(const FileMapping &) = delete;
@@ -48,9 +74,11 @@ public:
   HANDLE GetFile(void) const { return hFile; }
   HANDLE GetFileMap(void) const { return hMap; }
   LPVOID GetMapView(void) const { return lpMap; }
+  size_t GetSize(void) const { return Size; }
 
 private:
-    bool TryCreateMapping(std::wstring path);
+  bool TryCreateMapping(std::wstring path, uint64_t file_flags, uint64_t page_flags,
+                        uint64_t view_flags);
 };
 
 static constexpr uint8_t TexturePackCount = 13;
@@ -75,47 +103,47 @@ enum TexturePackFlags {
 };
 
 static const std::unordered_map<TexturePackFlags, std::string> FlagToBasename{
-    {TexturePackFlags::Controller, "controllertexturepack"},
-    {TexturePackFlags::Emblems, "emblemstexturepack"},
-    {TexturePackFlags::GlobalUI, "globaluitexturepack"},
-    {TexturePackFlags::Hopper, "hoppertexturepack"},
-    {TexturePackFlags::InGameChapter, "ingamechapterpack"},
-    {TexturePackFlags::LargeAvatar, "largeavatartexturepack"},
-    {TexturePackFlags::Levels, "levelstexturepack"},
-    {TexturePackFlags::Loading, "loadingtexturepack"},
-    {TexturePackFlags::MainMenuAndCampaign, "mainmenuandcampaigntexturepack"},
-    {TexturePackFlags::MainMenu, "mainmenutexturepack"},
-    {TexturePackFlags::Medals, "medalstexturepack"},
-    {TexturePackFlags::Skulls, "skullstexturepack"},
-    {TexturePackFlags::SPMapPreview, "spmappreviewtexturepack"},
-    {TexturePackFlags::All, "all"},
-    {TexturePackFlags::None, "none"},
+    { TexturePackFlags::Controller, "controllertexturepack"},
+    { TexturePackFlags::Emblems, "emblemstexturepack"},
+    { TexturePackFlags::GlobalUI, "globaluitexturepack"},
+    { TexturePackFlags::Hopper, "hoppertexturepack"},
+    { TexturePackFlags::InGameChapter, "ingamechapterpack"},
+    { TexturePackFlags::LargeAvatar, "largeavatartexturepack"},
+    { TexturePackFlags::Levels, "levelstexturepack"},
+    { TexturePackFlags::Loading, "loadingtexturepack"},
+    { TexturePackFlags::MainMenuAndCampaign, "mainmenuandcampaigntexturepack"},
+    { TexturePackFlags::MainMenu, "mainmenutexturepack"},
+    { TexturePackFlags::Medals, "medalstexturepack"},
+    { TexturePackFlags::Skulls, "skullstexturepack"},
+    { TexturePackFlags::SPMapPreview, "spmappreviewtexturepack"},
+    { TexturePackFlags::All, "all"},
+    { TexturePackFlags::None, "none"},
 };
 
 static const std::unordered_map<std::string, TexturePackFlags> BasenameToFlag{
     { "controllertexturepack", TexturePackFlags::Controller},
-    { "emblemstexturepack", TexturePackFlags::Emblems },
-    { "globaluitexturepack", TexturePackFlags::GlobalUI },
-    { "hoppertexturepack", TexturePackFlags::Hopper },
-    { "ingamechapterpack", TexturePackFlags::InGameChapter },
-    { "largeavatartexturepack", TexturePackFlags::LargeAvatar },
-    { "levelstexturepack", TexturePackFlags::Levels },
-    { "loadingtexturepack", TexturePackFlags::Loading },
-    { "mainmenuandcampaigntexturepack", TexturePackFlags::MainMenuAndCampaign },
-    { "mainmenutexturepack", TexturePackFlags::MainMenu },
-    { "medalstexturepack", TexturePackFlags::Medals },
-    { "skullstexturepack", TexturePackFlags::Skulls },
-    { "spmappreviewtexturepack", TexturePackFlags::SPMapPreview },
-    { "all", TexturePackFlags::All },
-    { "none", TexturePackFlags::None },
+    { "emblemstexturepack", TexturePackFlags::Emblems},
+    { "globaluitexturepack", TexturePackFlags::GlobalUI},
+    { "hoppertexturepack", TexturePackFlags::Hopper},
+    { "ingamechapterpack", TexturePackFlags::InGameChapter},
+    { "largeavatartexturepack", TexturePackFlags::LargeAvatar},
+    { "levelstexturepack", TexturePackFlags::Levels},
+    { "loadingtexturepack", TexturePackFlags::Loading},
+    { "mainmenuandcampaigntexturepack", TexturePackFlags::MainMenuAndCampaign},
+    { "mainmenutexturepack", TexturePackFlags::MainMenu},
+    { "medalstexturepack", TexturePackFlags::Medals},
+    { "skullstexturepack", TexturePackFlags::Skulls},
+    { "spmappreviewtexturepack", TexturePackFlags::SPMapPreview},
+    { "all", TexturePackFlags::All},
+    { "none", TexturePackFlags::None},
 };
 
 enum class ResourceFormat {
-    A8R8G8B8,
-    DXT1,
-    DXT3,
-    DXT5,
-    INVALID,
+  A8R8G8B8,
+  DXT1,
+  DXT3,
+  DXT5,
+  INVALID,
 };
 
 static const std::unordered_map<ResourceFormat, std::string> ResourceFormatToString{
@@ -123,48 +151,48 @@ static const std::unordered_map<ResourceFormat, std::string> ResourceFormatToStr
     {ResourceFormat::DXT1, "DXT1"},
     {ResourceFormat::DXT3, "DXT3"},
     {ResourceFormat::DXT5, "DXT5"},
-    {ResourceFormat::INVALID, ""}
-};
+    {ResourceFormat::INVALID, ""}};
 
 struct TexturePackBlock {
   size_t Key;
   size_t Size;
   size_t Offset;
 
-  friend std::ostream& operator<<(std::ostream& os, const TexturePackBlock& block);
+  friend std::ostream &operator<<(std::ostream &os, const TexturePackBlock &block);
 };
 
 /* PERM == Resource data is in .perm.bin | TEMP == Resource data is in .temp.bin */
-enum class TexturePackType { 
-    PERM, 
-    TEMP, 
-    INVALID 
-};
+enum class TexturePackType { PERM, TEMP, INVALID };
 
 static const std::unordered_map<TexturePackType, std::string> PackTypeToExt{
     {TexturePackType::PERM, ".perm.bin"},
     {TexturePackType::TEMP, ".temp.bin"},
-    {TexturePackType::INVALID, ""}
-};
+    {TexturePackType::INVALID, ""}};
 
 struct TexturePackResource {
   std::string Name;
-  char * Origin;
+  char *Origin;
   size_t Offset;
   size_t Size;
   int32_t Width;
   int32_t Height;
   ResourceFormat Format;
   TexturePackType PackType;
+  TexturePackFlags TexturePackFlag; //
 
-  bool Fits(const TexturePackResource &other);
-  friend std::ostream& operator<<(std::ostream& os, const TexturePackResource& res);
+  bool Fits(const TexturePackResource &other) const;
+  friend std::ostream &operator<<(std::ostream &os, const TexturePackResource &res);
+  friend bool operator==(const TexturePackResource& lhs, const TexturePackResource& rhs) {
+    return (lhs.Name == rhs.Name) && (lhs.TexturePackFlag == rhs.TexturePackFlag);
+  }
 };
+
+typedef const TexturePackResource *const ManagedResource;
 
 typedef std::tuple<FileMapping, FileMapping, TexturePackType> TexturePack;
 static const FileMapping &GetPerm(const TexturePack &tp) { return std::get<0>(tp); }
 static const FileMapping &GetTemp(const TexturePack &tp) { return std::get<1>(tp); }
-static   TexturePackType  GetType(const TexturePack &tp) { return std::get<2>(tp); }
+static TexturePackType GetType(const TexturePack &tp) { return std::get<2>(tp); }
 
 typedef std::variant<TexturePackResource, TexturePackBlock> TexturePackEntry;
 
@@ -185,16 +213,81 @@ public:
   uint16_t to_uint16() const { return Value; }
 };
 
-enum class DumpFormatFlags {
-    Native,
-    EncodeToPNG
-};
+enum class DumpFormatFlags { Native, EncodeToPNG };
 
 enum class DumpCompressionFlags {
-    Fastest,
-    Smallest,
-    None,
+  Fastest,
+  Smallest,
+  None,
 };
+
+enum class SourceType { Internal, External, Invalid };
+
+static const std::unordered_map<SourceType, std::string> SourceTypeToString {
+    {SourceType::Internal, "Internal"},
+    {SourceType::External, "External"},
+    {SourceType::Invalid,  "Invalid"},
+};
+
+typedef std::variant<ManagedResource, std::filesystem::path> SourceProvider;
+
+enum class TexturePackInjectFlags {
+    Strict,
+    None
+};
+
+struct PatchSource {
+private:
+  std::string ID;
+  SourceType Type;
+  SourceProvider Provider;
+
+public:
+  explicit PatchSource(const std::string &id, const std::filesystem::path &path,
+                       const SourceType &type);
+
+  // Copy constructor and copy assignment operator
+  PatchSource(const PatchSource &) = default;
+  PatchSource &operator=(const PatchSource &) = default;
+
+  ~PatchSource();
+
+  const std::string &GetID(void) const { return ID; }
+  const SourceType &GetType(void) const { return Type; }
+  const SourceProvider &GetProvider(void) const { return Provider; }
+
+  //move to .cpp
+  friend bool operator==(const PatchSource &lhs, const PatchSource &rhs) {
+    return lhs.GetID() == rhs.GetID();
+  }
+
+  friend bool operator==(const PatchSource &lhs, const ManagedResource &rhs) {
+    if (lhs.GetType() == SourceType::Internal) {
+      const auto &provider = std::get<ManagedResource>(lhs.GetProvider());
+      return provider == rhs;
+    } else {
+      return false;
+    }
+  }
+
+private:
+  SourceProvider InitializeProvider(const std::filesystem::path &path, const SourceType &type);
+};
+} // namespace mcctp
+
+namespace std {
+template <> struct hash<mcctp::PatchSource> {
+  std::size_t operator()(const mcctp::PatchSource &ps) const {
+    return std::hash<std::string>{}(ps.GetID());
+  }
+};
+} // namespace std
+
+namespace mcctp {
+typedef std::unordered_map<TexturePackFlags, TexturePack> TexturePackFileMap;
+typedef std::unordered_map<TexturePackFlags, TexturePackIndex> TexturePackIndexMap;
+typedef std::unordered_map<std::string, TexturePackFlags> ResourceToTextureMap;
+typedef std::unordered_map<PatchSource, ManagedResource> PatchMap;
 
 class ctx {
 public:
@@ -222,8 +315,17 @@ public:
 
   bool InjectAndWritePack(std::string src, std::string dst, TexturePackFlags flag);
   TexturePackResource GetMappedResource(std::string res_name);
+  std::optional<ManagedResource> GetManagedResource(std::string res_name);
+
+  Result VerifyPatchMap(const PatchMap &map);
+  Result SetCurrentPatchMap(PatchMap map);
+  Result InjectCurrentPatchMapAndExport(TexturePackInjectFlags flags);
+  Result DumpCurrentPatchMap(const std::filesystem::path &path);
+  Result DumpPatchMap(PatchMap map);
+
   std::string GetTexturePackFilenameForResource(TexturePackResource res);
   std::vector<TexturePackResource> GetResourcesFromTexturePack(TexturePackFlags flag) const;
+  TexturePackFlags GetTexturePackFlagFromResourceName(std::string name) const;
   GLuint RenderDDSToTexture(TexturePackResource res);
   bool ShareWithWGLContext(HGLRC hrc = wglGetCurrentContext());
 
@@ -233,8 +335,11 @@ private:
 private:
   TexturePackField m_Field;
   std::filesystem::path m_PathPrefix;
-  std::unordered_map<TexturePackFlags, TexturePack> m_TexturePackFileMap;
-  std::unordered_map<TexturePackFlags, TexturePackIndex> m_TexturePackIndexMap;
+
+  TexturePackFileMap m_TexturePackFileMap; /* Texture pack managed file mappings */
+  TexturePackIndexMap m_TexturePackIndexMap; /* Resource index for a mapped texture pack */
+  ResourceToTextureMap m_ResourceToTexturePackMap; /* Reverse resource index for a mapped texture pack (reduces patch time complexity) */
+  PatchMap m_CurrentPatchMap;
 
   HDC m_hDC;
   HGLRC m_hRC;
@@ -254,8 +359,12 @@ bool MemoryMapAndIndexTexturePacks(void);
 
 bool DumpTexturePacks(DumpFormatFlags format_flag = DumpFormatFlags::Native,
                       DumpCompressionFlags compression_flag = DumpCompressionFlags::None);
-
 void ClearTexturePackDumps(void);
+
+
+
+static bool SetPatchMap() { return false; }
+
 
 bool InjectResource(std::string src, std::string dst, TexturePackFlags flag);
 std::stringstream BuildDDSHeaderForResource(TexturePackResource res);

@@ -66,7 +66,7 @@ void main() {
 
             return program;
         }
-	}
+    }
 
     void Initialize(std::filesystem::path path, TexturePackFlags flags) {
         ctx::Instance()->SetPathPrefix(path);
@@ -302,8 +302,8 @@ void main() {
         return res;
     }
 
-    FileMapping::FileMapping(std::wstring path) {
-        if (!TryCreateMapping(path)) {
+    FileMapping::FileMapping(std::wstring path, uint64_t file_flags, uint64_t page_flags, uint64_t view_flags) {
+        if (!TryCreateMapping(path, file_flags, page_flags, view_flags)) {
             throw std::exception("File mapping could not be created!");
         }
     }
@@ -313,11 +313,13 @@ void main() {
         hFile = other.hFile;
         hMap = other.hMap;
         lpMap = other.lpMap;
+        Size = other.Size;
 
         // Reset the other object's members to safe defaults
         other.hFile = INVALID_HANDLE_VALUE;
         other.hMap = NULL;
         other.lpMap = NULL;
+        other.Size = 0;
     }
 
     FileMapping& FileMapping::operator=(FileMapping&& other) noexcept {
@@ -330,11 +332,13 @@ void main() {
             hFile = other.hFile;
             hMap = other.hMap;
             lpMap = other.lpMap;
+            Size = other.Size;
 
             // Reset the other object's members to safe defaults
             other.hFile = INVALID_HANDLE_VALUE;
             other.hMap = NULL;
             other.lpMap = NULL;
+            other.Size = 0;
         }
         return *this;
     }
@@ -347,8 +351,10 @@ void main() {
         if (hFile != INVALID_HANDLE_VALUE)
             CloseHandle(hFile);
     }
-    bool FileMapping::TryCreateMapping(std::wstring path) {
-        hFile = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING,
+    bool FileMapping::TryCreateMapping(std::wstring path, uint64_t file_flags, uint64_t page_flags,
+                                       uint64_t view_flags) {
+        hFile = CreateFileW(path.c_str(), file_flags,
+                            FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING,
             FILE_ATTRIBUTE_NORMAL, NULL);
         if (hFile == INVALID_HANDLE_VALUE) {
             std::cerr << "Could not open file: ";
@@ -356,7 +362,7 @@ void main() {
             return false;
         }
 
-        hMap = CreateFileMappingW(hFile, NULL, PAGE_READONLY, 0, 0, NULL);
+        hMap = CreateFileMappingW(hFile, NULL, page_flags, 0, 0, NULL);
         if (hMap == NULL) {
             std::cerr << "Could not create file mapping ";
             std::cerr << GetLastError() << std::endl;
@@ -364,7 +370,7 @@ void main() {
             return false;
         }
 
-        lpMap = MapViewOfFile(hMap, FILE_MAP_READ, 0, 0, 0);
+        lpMap = MapViewOfFile(hMap, view_flags, 0, 0, 0);
         if (lpMap == NULL) {
             std::cerr << "Could not map view of file ";
             std::cerr << GetLastError() << std::endl;
@@ -373,7 +379,8 @@ void main() {
             return false;
         }
 
-        std::cout << "Success!" << std::endl;
+        Size = GetFileSize(hFile, NULL);
+        std::cout << "Success! FileSize: " << Size << std::endl;
         return true;
     }
 
@@ -386,11 +393,13 @@ void main() {
 
     std::ostream& operator<<(std::ostream& os, const TexturePackResource& res) {
         os << "Name: " << res.Name << ", "
-            << "Offset: " << res.Offset << ", "
-            << "Size: " << res.Size << ", "
-            << "Width: " << res.Width << ", "
-            << "Height: " << res.Height << ", "
-            << "Format: " << (int)res.Format;
+           << "Offset: " << res.Offset << ", "
+           << "Size: " << res.Size << ", "
+           << "Width: " << res.Width << ", "
+           << "Height: " << res.Height << ", "
+           << "Format: " << ResourceFormatToString.at(res.Format) << ", "
+           << "PackType: " << PackTypeToExt.at(res.PackType) << ", "
+           << "TexturePack: " << FlagToBasename.at(res.TexturePackFlag);
         return os;
     }
 
@@ -444,8 +453,8 @@ void main() {
 
             if (std::filesystem::exists(temp)) {
                 TexturePack tp = {
-                    FileMapping(perm),
-                    FileMapping(temp),
+                    FileMapping(perm, GENERIC_READ, PAGE_READONLY, FILE_MAP_READ),
+                    FileMapping(temp, GENERIC_READ, PAGE_READONLY, FILE_MAP_READ),
                     TexturePackType::TEMP
                 };
                 m_TexturePackFileMap.insert(std::make_pair(flag, std::move(tp)));
@@ -453,11 +462,12 @@ void main() {
             }
             else {
                 TexturePack tp = {
-                    FileMapping(perm),
-                    FileMapping(idx),
+                    FileMapping(perm, GENERIC_READ, PAGE_READONLY, FILE_MAP_READ),
+                    FileMapping(idx,  GENERIC_READ, PAGE_READONLY, FILE_MAP_READ),
                     TexturePackType::PERM
                 };
                 m_TexturePackFileMap.insert(std::make_pair(flag, std::move(tp)));
+                return true;
             }
         }
         catch (std::exception& e) {
@@ -499,9 +509,11 @@ void main() {
         char* fend = fptr + GetFileSize(hFile, NULL);
         std::cout << "TexturePackSize: (" << GetFileSize(hFile, NULL) << ")" << std::endl;
 
-        std::vector<TexturePackBlock> blocks;
-        std::vector<TexturePackResource> resources;
-        int neither = 0;
+        int block_count = 0;
+        TexturePackBlock last_block;
+
+        int resource_count = 0;
+        int neither_count = 0;
 
         while (fptr < fend) {
             uint32_t pos = fptr - static_cast<char*>(lpMap);
@@ -512,16 +524,19 @@ void main() {
                 TexturePackBlock block = { block_key, block_size, pos };
                 auto it = m_TexturePackIndexMap.find(flag);
                 if (it != m_TexturePackIndexMap.end()) {
-                    it->second.insert({ std::to_string(blocks.size()), (TexturePackEntry)block });
-                    std::cout << "Added: " << block << std::endl;
+                    it->second.insert({ std::to_string(block_count), (TexturePackEntry)block });
+                    //std::cout << "Added: " << block << std::endl;
                 }
                 else {
                     TexturePackIndex index;
-                    index.insert({ std::to_string(blocks.size()), (TexturePackEntry)block });
+                    index.insert({std::to_string(block_count), (TexturePackEntry)block});
                     m_TexturePackIndexMap.insert({ flag, index });
-                    std::cout << "Added: " << block << std::endl;
+                    //std::cout << "Added: " << block << std::endl;
                 }
-                blocks.push_back(block);
+
+                block_count += 1;
+                last_block = block;
+                m_ResourceToTexturePackMap.insert({std::to_string(block_count), flag});
             }
             else if (block_key == 0xCDBFA090) {
                 int start = (int)pos;
@@ -570,29 +585,30 @@ void main() {
                                            wid,
                                            hig,
                                            static_cast<ResourceFormat>(form),
-                                           type};
+                                           type,
+                                           flag};
 
-                res.Offset = blocks.empty() ? off : blocks.back().Offset + off;
+                res.Offset = (block_count == 0) ? off : last_block.Offset + off;
 
                 auto it = m_TexturePackIndexMap.find(flag);
                 if (it != m_TexturePackIndexMap.end()) {
                     it->second.insert({ res.Name, (TexturePackEntry)res });
-                    std::cout << "Added: " << res << std::endl;
+                    //std::cout << "Added: " << res << std::endl;
                 }
                 else {
                     TexturePackIndex index;
                     index.insert({ res.Name, (TexturePackEntry)res });
                     m_TexturePackIndexMap.insert({ flag, index });
-                    std::cout << "Added: " << res << std::endl;
+                    //std::cout << "Added: " << res << std::endl;
                 }
-                resources.push_back(res);
+                resource_count += 1;
             }
             else {
-                neither += 1;
+                neither_count += 1;
             }
             fptr = static_cast<char*>(lpMap) + pos + block_size + 0x10;
         }
-        std::cout << "TexturePackStats: " << "Files: " << resources.size() << " Blocks: " << blocks.size() << " Neither: " << neither << std::endl;
+        std::cout << "TexturePackStats: " << "Files: " << resource_count << " Blocks: " << block_count << " Neither: " << neither_count << std::endl;
 
         return true;
     }
@@ -828,6 +844,151 @@ void main() {
         }
         return TexturePackResource();
     }
+    std::optional<ManagedResource> ctx::GetManagedResource(std::string res_name) {
+        for (uint8_t i = 0; i < TexturePackCount; ++i) {
+            TexturePackFlags flag = (TexturePackFlags)(1 << i);
+            auto index = m_TexturePackIndexMap.find(flag);
+            if (index != m_TexturePackIndexMap.end()) {
+                auto it = index->second.find(res_name);
+                if (it != index->second.end()) {
+                    return &(std::get<TexturePackResource>(it->second));
+                }
+            }
+        }
+        return std::nullopt;
+    }
+
+    Result ctx::VerifyPatchMap(const PatchMap &map) {
+        ResultType type = ResultType::ok;
+        std::stringstream msg;
+
+        for (const auto &entry : map) {
+            const auto &src = entry.first;
+            const auto &dst = entry.second;
+            const auto &src_type = src.GetType();
+
+            if (src_type == SourceType::Internal) {
+                // Compare TexturePackResource's
+                const auto& provider = std::get<ManagedResource>(src.GetProvider());
+                if (!dst->Fits(*provider)) {
+                    type = ResultType::Error;
+                    msg << "Destination Resource " << std::vformat("{0}: {1}x{2}", std::make_format_args(dst->Name, dst->Width, dst->Height)) 
+                        << " does not fit Source Resource "
+                        << std::vformat("{0}: {1}x{2}",
+                                       std::make_format_args(provider->Name, provider->Width,
+                                                             provider->Height));
+                }
+            } else if (src_type == SourceType::External) {
+                // Load file, check its resolution and ability to be converted if need be
+                type = ResultType::Error; //TODO 
+            } else {
+                type = ResultType::Error;
+            }
+        }
+        return {type, msg.str()};
+    }
+
+    Result ctx::SetCurrentPatchMap(PatchMap map) {
+        Result res = VerifyPatchMap(map);
+        if (!(res.GetType() == ResultType::Error)) {
+            m_CurrentPatchMap = std::move(map);
+        }
+        return res;
+    }
+
+    Result ctx::InjectCurrentPatchMapAndExport(TexturePackInjectFlags flags) {
+        // We need to handle when a dst is also src so output has no
+        // implicit dependency on order
+
+        
+        // find the target texture packs (refactor to make them know instead of us needing to count)
+        TexturePackField m_Field = 0;
+        for (const auto &pair : m_CurrentPatchMap) {
+            const auto &dst = pair.second;
+            m_Field.SetFlag(dst->TexturePackFlag);
+            std::cout << "here: " << dst->TexturePackFlag << std::endl; 
+        }
+
+        std::unordered_map<TexturePackFlags, FileMapping> file_map;
+        // for each target texture pack, create a temp file and map it
+        for (uint8_t i = 0; i < TexturePackCount; ++i) {
+            TexturePackFlags flag = (TexturePackFlags)(1 << i);
+            if (m_Field.HasFlag(flag)) {
+                const auto &tp = m_TexturePackFileMap.at(flag);
+                const auto &type = GetType(tp);
+                const auto &fm = (type == TexturePackType::PERM)
+                                     ? GetPerm(tp)
+                                     : GetTemp(tp);
+                std::filesystem::path path = std::filesystem::current_path() /
+                                             (FlagToBasename.at(flag) + PackTypeToExt.at(type) + ".new");
+                LPVOID lpMap = fm.GetMapView();
+                char *start = static_cast<char *>(lpMap);
+
+                HANDLE hFile = INVALID_HANDLE_VALUE;
+                hFile = CreateFileW(path.generic_wstring().c_str(), GENERIC_READ | GENERIC_WRITE,
+                                    FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, CREATE_ALWAYS,
+                                           FILE_ATTRIBUTE_NORMAL, NULL);
+                if (hFile == INVALID_HANDLE_VALUE) {
+                    std::cerr << "Could not open file handle: ";
+                    std::cerr << GetLastError() << std::endl;
+                } else {
+                    DWORD newSize = fm.GetSize();
+                    if (SetFilePointer(hFile, newSize, NULL, FILE_BEGIN) !=
+                        INVALID_SET_FILE_POINTER) {
+                            if (SetEndOfFile(hFile) == 0) {
+                                std::cerr << "Could not SetEndOfFile: ";
+                                std::cerr << GetLastError() << std::endl;
+                            }
+                    } else {
+                        std::cerr << "Could not set file pointer: ";
+                        std::cerr << GetLastError() << std::endl;
+                    }
+                    CloseHandle(hFile);
+                }
+                std::cout << "size: " << fm.GetSize() << " path: " << path << std::endl;
+                FileMapping out_file_map(path.generic_wstring(), GENERIC_READ | GENERIC_WRITE, PAGE_READWRITE, FILE_MAP_WRITE);
+
+                LPVOID lpMapOut = out_file_map.GetMapView();
+                char *out_start = static_cast<char *>(lpMapOut);
+
+                std::memcpy(out_start, start, fm.GetSize());
+                file_map.insert({flag, std::move(out_file_map)});
+            }
+        }
+        std::cout << "file_map_count: " << file_map.size() << std::endl;
+
+        for (const auto &pair : m_CurrentPatchMap) {
+            const auto& src = pair.first;
+            const auto& dst = pair.second;
+            const auto& dst_fm = file_map.at(dst->TexturePackFlag);
+
+            if (src.GetType() == SourceType::Internal) {
+                const auto &provider = std::get<ManagedResource>(src.GetProvider());
+                char* src_start = provider->Origin + provider->Offset;
+
+                // get origin from new file instead of dst->Origin
+                LPVOID lpMapOut = dst_fm.GetMapView();
+                char *new_dst_origin = static_cast<char *>(lpMapOut);
+                char *dst_start = new_dst_origin + dst->Offset;
+
+                // Everything rn is contingent on .Fits() which implies that size in mem
+                // is equal for either resource .. this will giga change
+                std::memcpy(dst_start, src_start, provider->Size);
+                std::cout << "Wrote: " << provider->Name << " to " << dst->Name << "!" << std::endl;
+            } else {
+                throw std::exception("The biggest exception evarr!");
+            }
+
+        }
+
+        return Result(); 
+    }
+
+
+
+    Result ctx::DumpCurrentPatchMap(const std::filesystem::path &path) { return Result(); }
+    Result ctx::DumpPatchMap(PatchMap map) { return Result(); }
+
     std::string ctx::GetTexturePackFilenameForResource(TexturePackResource res) {
         for (uint8_t i = 0; i < TexturePackCount; ++i) {
             TexturePackFlags flag = (TexturePackFlags)(1 << i);
@@ -855,9 +1016,54 @@ void main() {
             return resources;
         }
     }
-#pragma warning(pop)
-    bool TexturePackResource::Fits(const TexturePackResource &other) {
+    TexturePackFlags ctx::GetTexturePackFlagFromResourceName(std::string name) const {
+        for (uint8_t i = 0; i < TexturePackCount; ++i) {
+            TexturePackFlags flag = (TexturePackFlags)(1 << i);
+            auto index = m_TexturePackIndexMap.find(flag);
+            if (index != m_TexturePackIndexMap.end()) {
+                auto it = index->second.find(name);
+                if (it != index->second.end()) {
+                    return flag;
+                }
+            }
+        }
+        return TexturePackFlags::None;
+    }
+    bool TexturePackResource::Fits(const TexturePackResource &other) const {
         return (Format == other.Format) && (Width == other.Width) &&
                (Height == other.Height) && (Size == other.Size);
     }
+    PatchSource::PatchSource(const std::string& id, const std::filesystem::path &path, const SourceType& type) :
+        ID(id), Type(type), Provider(InitializeProvider(path, type)) { 
+        
+    }
+    PatchSource::~PatchSource() {}
+    SourceProvider PatchSource::InitializeProvider(const std::filesystem::path &path,
+                                                   const SourceType &type) {
+        try {
+            if (type == SourceType::External) {
+                // Verify file exists
+                if (std::filesystem::exists(path) && std::filesystem::is_regular_file(path)) {
+                    return path;
+                } else {
+                    // Throw
+                }
+            } else if (type == SourceType::Internal) {
+                // Verify resource exists
+                auto *inst = ctx::Instance();
+                auto res = inst->GetManagedResource(path.generic_string());
+                if (res.has_value()) {
+                    return res.value();
+                } else {
+                    // Throw
+                }
+            } else {
+                Type = SourceType::Invalid;
+            }
+        } catch (...) {
+            return "";
+        }
+    }
+    
+#pragma warning(pop)
     } // namespace mcctp
