@@ -1,3 +1,6 @@
 ---
+BasedOnStyle:  Microsoft
 Language:        Cpp
 ColumnLimit:     100
+BreakBeforeBraces: Attach
+SortIncludes: false

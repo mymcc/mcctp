@@ -13,7 +13,7 @@
   </span>
 </div>
 <p align="center">
-<img align="center" width="75%" height="75%" src="res/Screenshot-2023-08-03-000034.png">
+<img align="center" width="75%" height="75%" src="res/Screenshot-2023-08-07-015524.png">
 </p>
 
 ## Features
