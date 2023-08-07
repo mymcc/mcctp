@@ -7,7 +7,9 @@ public:
   ~Image();
 
   void Load(void);
+  void Load(int* texture_unit_offset);
   void Unload(void);
+  void Unload(int* texture_unit_offset);
 
   void Bind(void)   const { glBindTexture(GL_TEXTURE_2D, m_RendererID); }
   void Unbind(void) const { glBindTexture(GL_TEXTURE_2D, 0); }

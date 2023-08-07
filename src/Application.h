@@ -2,6 +2,7 @@
 
 #include "Layer/Layer.h"
 
+
 namespace mcctp {
 struct ApplicationSpecification {
   std::string Name = "mcctp-example";
@@ -43,6 +44,7 @@ private:
 
 private:
   HWND m_hHWND;
+  std::unique_ptr<BorderlessWindow> m_Window;
   WNDCLASSEXW m_hWC;
   ApplicationSpecification m_Specification;
   std::vector<std::shared_ptr<mcctp::Layer>> m_LayerStack;

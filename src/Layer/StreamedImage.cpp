@@ -51,6 +51,7 @@ void mcctp::StreamedImage::OnUpdate(float ts) {
     m_VisCount = 0;
     m_VisStart = 0;
     m_VisEnd = 0;
+    m_FrameTime = ts;
 }
 
 void mcctp::StreamedImage::OnUIRender() {
@@ -66,11 +67,6 @@ void mcctp::StreamedImage::OnUIRender() {
 
     DoInstanceConfiguration();
     DoTexturePackDumper();
-
-    GLint texture_count;
-    glGetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, &texture_count);
-    ImGui::Text(std::to_string(texture_count).c_str());
-
     ImGui::End();
 
     DoTextureViewer();
@@ -187,7 +183,7 @@ void mcctp::StreamedImage::DoTexturePackDumper(void) {
     mcctp::ctx *inst = ctx::Instance();
     bool can_dump = (inst->GetMappedTexturePackCount() == 
         inst->ctx::GetIndexedTexturePackCount()) && 
-        (inst->GetMappedTexturePackCount() > 1);
+        (inst->GetMappedTexturePackCount() >= 1);
 
     if (!can_dump)
         ImGui::BeginDisabled();
@@ -238,13 +234,13 @@ void mcctp::StreamedImage::DoTexturePackDumper(void) {
 void mcctp::StreamedImage::DoTextureViewer(void) { 
     ImGui::Begin("Texture Viewer");
     static float scale = 1.0f;
-    ImGui::SliderFloat("Scale", &scale, 1.0f, 20.0f);
+    //ImGui::SliderFloat("Scale", &scale, 1.0f, 20.0f);
     if (m_TextureThumbnails.size() != 0) {
       //auto texture = m_TextureThumbnails.at(selected_thumbnail);
       //ImGui::Image((ImTextureID)(intptr_t)texture->GetRendererID(),
       //             ImVec2(texture->GetWidth(), texture->GetHeight()));
 
-      auto texture = m_TextureThumbnails.at(selected_thumbnail);
+      auto& texture = m_TextureThumbnails.at(selected_thumbnail);
       if (!texture->IsLoaded()) {
           texture->Load();
       }
@@ -282,7 +278,7 @@ void mcctp::StreamedImage::DoTextureViewer(void) {
     } else {
       ImGui::Image(
             (ImTextureID)(intptr_t)0,
-            ImVec2(640, 360));
+          ImGui::GetContentRegionAvail());
     }
 
     ImGui::End();
@@ -314,10 +310,11 @@ void mcctp::StreamedImage::DoTextureViewer(void) {
         ImVec2 last_rect_size = ImGui::GetItemRectSize();
         if (ImGui::Selectable(mcctp::FlagToBasename.at(flag).c_str())) {
           if (flag != selected_texture_pack) {
-            for (auto &thumbnail : m_TextureThumbnails) {
-              thumbnail.reset();
-            }
+            //for (auto &thumbnail : m_TextureThumbnails) {
+            //  thumbnail.reset();
+            //}
             m_TextureThumbnails.clear();
+            last_texture_unit = 0;
             selected_thumbnail = 0;
             rect_pos = last_rect_pos;
             rect_size = last_rect_size;
@@ -362,13 +359,9 @@ void mcctp::StreamedImage::DoTextureViewer(void) {
           inst->GetResourcesFromTexturePack(selected_texture_pack);
       SortResources(resources);
       for (const auto &res : resources) {
-        auto thumbnail = std::make_shared<mcctp::Image>((TexturePackResource)res, false);
-
-        //thumbnail->Bind();
-        //glActiveTexture(GL_TEXTURE0 + texture_unit);
-        //thumbnail->Unbind();
-
-        m_TextureThumbnails.emplace_back(thumbnail);
+        //auto thumbnail = std::make_shared<mcctp::Image>((TexturePackResource)res, false);
+        auto thumbnail = std::make_unique<mcctp::Image>((TexturePackResource)res, false);
+        m_TextureThumbnails.emplace_back(std::move(thumbnail));
         ++texture_unit;
       }
       needs_load = false;
@@ -385,7 +378,7 @@ void mcctp::StreamedImage::DoTextureViewer(void) {
     bool in_range = false;
     for (int n = 0; n < buttons_count; ++n) {
       ImGui::PushID(n);
-      auto text = m_TextureThumbnails.at(n);
+      auto& text = m_TextureThumbnails.at(n);
       ImVec2 start = ImGui::GetCursorScreenPos();
       auto wc = GetItemRectMaintainAspectRatio(text->GetWidth(), text->GetHeight(), button_sz);
       
@@ -410,8 +403,7 @@ void mcctp::StreamedImage::DoTextureViewer(void) {
 
           if (!(n == selected_thumbnail) && 
               text->IsLoaded()) {
-
-              text->Unload();
+              //text->Unload();
           }
 
       }
@@ -435,7 +427,7 @@ void mcctp::StreamedImage::DoTextureViewer(void) {
 void mcctp::StreamedImage::DoTextureInfo(void) { 
     ImGui::Begin("Texture Info");
     if (m_TextureThumbnails.size() != 0) {
-      auto texture = m_TextureThumbnails.at(selected_thumbnail);
+      auto& texture = m_TextureThumbnails.at(selected_thumbnail);
       ImGui::SeparatorText(texture->GetName().c_str());
       ImGui::Text("Texture Pack: %s", mcctp::FlagToBasename.at(selected_texture_pack).c_str());
       ImGui::Text("Pack Type: %s", PackTypeToExt.at(texture->GetPackType()).c_str());
@@ -465,6 +457,17 @@ void mcctp::StreamedImage::DoStatusBar(void)
 
     if (ImGui::BeginViewportSideBar("##MainStatusBar", NULL, ImGuiDir_Down, height, window_flags)) {
         if (ImGui::BeginMenuBar()) {
+
+            float cpu_pct = mcctp::utils::get_current_process_total_cpu_used();
+            size_t bytes = mcctp::utils::get_current_process_physical_memory();
+            size_t total_bytes = mcctp::utils::get_total_physical_memory();
+
+            ImGui::Text("%.3f ms/frame (%.1f FPS)", 1000.0f * m_FrameTime,
+                1.0f / m_FrameTime);
+
+            ImGui::Text("cpu: (%.1f %)", cpu_pct);
+            ImGui::Text("mem: (%.2f MiB/ %.2f GiB)", bytes / (1024.0 * 1024.0), total_bytes / (1024.0 * 1024.0 * 1024.0));
+
             static float progress = 0.0f, progress_dir = 1.0f;
             if (m_IsAction) {
                 ImGui::Text("Dumping ... ");

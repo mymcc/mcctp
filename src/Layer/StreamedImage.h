@@ -23,7 +23,8 @@ private:
   mcctp::DumpFormatFlags m_DumpFormatFlag;
   mcctp::DumpCompressionFlags m_CompressionFlag;
   std::filesystem::path m_TexturePacksPath;
-  std::vector<std::shared_ptr<Image>> m_TextureThumbnails;
+  //std::vector<std::shared_ptr<Image>> m_TextureThumbnails;
+  std::vector<std::unique_ptr<Image>> m_TextureThumbnails;
   std::shared_ptr<Image> m_AppIcon;
   bool m_MaintainAspectRatio = true;
   unsigned int selected_thumbnail = 0;
@@ -36,5 +37,9 @@ private:
   std::atomic<bool> m_IsAction;
   std::atomic<int> m_DumpCount;
   int m_MaxDumpCount;
+
+  int last_texture_unit = 0;
+
+  float m_FrameTime = 0.0f;
 };
 } // namespace mcctp
