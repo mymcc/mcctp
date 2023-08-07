@@ -16,6 +16,8 @@ private:
   void DoTexturePackDumper(void);
   void DoTextureViewer(void);
   void DoTextureInfo(void);
+  void DoDebugInfo(void);
+  void DoStatusBar(void);
 
 private:
   mcctp::DumpFormatFlags m_DumpFormatFlag;
@@ -27,5 +29,12 @@ private:
   unsigned int selected_thumbnail = 0;
   bool show_demo = false;
   mcctp::TexturePackFlags selected_texture_pack = mcctp::TexturePackFlags::None;
+  int m_VisCount = 0;
+  int m_VisStart = 0;
+  int m_VisEnd = 0;
+
+  std::atomic<bool> m_IsAction;
+  std::atomic<int> m_DumpCount;
+  int m_MaxDumpCount;
 };
 } // namespace mcctp

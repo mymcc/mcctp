@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <filesystem>
 #include <deque>
+#include <atomic>
 #include <windows.h>
 
 // Data stored per platform window

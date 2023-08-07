@@ -19,6 +19,7 @@
 #include <memory>
 #include <assert.h>
 #include <format>
+#include <functional>
 
 #include <codecvt>
 #include <locale>
@@ -136,6 +137,24 @@ static const std::unordered_map<std::string, TexturePackFlags> BasenameToFlag{
     { "spmappreviewtexturepack", TexturePackFlags::SPMapPreview},
     { "all", TexturePackFlags::All},
     { "none", TexturePackFlags::None},
+};
+
+static const std::unordered_map<TexturePackFlags, int> FlagToFileCount{
+    { TexturePackFlags::Controller, 47},
+    { TexturePackFlags::Emblems, 567},
+    { TexturePackFlags::GlobalUI, 304},
+    { TexturePackFlags::Hopper, 106},
+    { TexturePackFlags::InGameChapter, 494},
+    { TexturePackFlags::LargeAvatar, 236},
+    { TexturePackFlags::Levels, 536},
+    { TexturePackFlags::Loading, 228},
+    { TexturePackFlags::MainMenuAndCampaign, 993},
+    { TexturePackFlags::MainMenu, 748},
+    { TexturePackFlags::Medals, 275},
+    { TexturePackFlags::Skulls, 41},
+    { TexturePackFlags::SPMapPreview, 142},
+    { TexturePackFlags::All, 4717},
+    { TexturePackFlags::None, 0},
 };
 
 enum class ResourceFormat {
@@ -329,6 +348,9 @@ public:
   GLuint RenderDDSToTexture(TexturePackResource res);
   bool ShareWithWGLContext(HGLRC hrc = wglGetCurrentContext());
 
+  void SetDumpCallback(std::function<void()> callback);
+  void SetDumpEndCallback(std::function<void()> callback);
+
 private:
   void InitializeGLContext(void);
 
@@ -347,6 +369,10 @@ private:
   GLuint m_OutputVertexShader;
   GLuint m_OutputFragmentShader;
   GLuint m_OutputProgram;
+
+private:
+    std::function<void()> m_DumpCallback;
+    std::function<void()> m_DumpEndCallback;
 };
 
 void Initialize(std::filesystem::path path, TexturePackFlags flags = TexturePackFlags::All);
@@ -356,12 +382,13 @@ void UnmapTexturePacks(void);
 
 bool IndexTexturePacks(void);
 bool MemoryMapAndIndexTexturePacks(void);
-
+void SetDumpCallback(std::function<void()> callback);
+void SetDumpEndCallback(std::function<void()> callback);
 bool DumpTexturePacks(DumpFormatFlags format_flag = DumpFormatFlags::Native,
                       DumpCompressionFlags compression_flag = DumpCompressionFlags::None);
 void ClearTexturePackDumps(void);
 
-
+int GetStagedDumpFileCount(void);
 
 static bool SetPatchMap() { return false; }
 

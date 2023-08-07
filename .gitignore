@@ -15,6 +15,21 @@ bin-int/
 **.idx
 **.pyc
 
+ui/texturepacks/controllertexturepack/
+ui/texturepacks/emblemstexturepack/
+ui/texturepacks/globaluitexturepack/
+ui/texturepacks/hoppertexturepack/
+ui/texturepacks/ingamechapterpack/
+ui/texturepacks/globaluitexturepack/
+ui/texturepacks/largeavatartexturepack/
+ui/texturepacks/levelstexturepack/
+ui/texturepacks/loadingtexturepack/
+ui/texturepacks/mainmenuandcampaigntexturepack/
+ui/texturepacks/mainmenutexturepack/
+ui/texturepacks/medalstexturepack/
+ui/texturepacks/skullstexturepack/
+ui/texturepacks/spmappreviewtexturepack/
+
 # Deps
 external/cache/*
 external/7z2201-x64/*

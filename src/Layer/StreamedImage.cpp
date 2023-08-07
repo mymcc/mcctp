@@ -44,10 +44,14 @@ mcctp::StreamedImage::StreamedImage(std::filesystem::path path) {
 }
 
 void mcctp::StreamedImage::OnAttach() {
-	
+    m_IsAction = false;
 }
 
-void mcctp::StreamedImage::OnUpdate(float ts) {}
+void mcctp::StreamedImage::OnUpdate(float ts) {
+    m_VisCount = 0;
+    m_VisStart = 0;
+    m_VisEnd = 0;
+}
 
 void mcctp::StreamedImage::OnUIRender() {
     
@@ -72,6 +76,10 @@ void mcctp::StreamedImage::OnUIRender() {
     DoTextureViewer();
 
     DoTextureInfo();
+
+    DoDebugInfo();
+
+    DoStatusBar();
 }
 
 void mcctp::StreamedImage::DoMainMenuBar(void) {
@@ -136,15 +144,6 @@ void mcctp::StreamedImage::DoMainMenuBar(void) {
       }
     }
     ImGui::End();
-
-    if (ImGui::BeginViewportSideBar("##MainStatusBar", NULL, ImGuiDir_Down, height, window_flags)) {
-      if (ImGui::BeginMenuBar()) {
-        ImGui::Text("Happy status bar");
-        ImGui::EndMenuBar();
-      }
-    }
-    ImGui::End();
-
 }
 
 void mcctp::StreamedImage::DoInstanceConfiguration(void) {
@@ -194,7 +193,25 @@ void mcctp::StreamedImage::DoTexturePackDumper(void) {
         ImGui::BeginDisabled();
 
     if (ImGui::Button("Dump TexturePacks")) {
-      mcctp::DumpTexturePacks(m_DumpFormatFlag, m_CompressionFlag);
+        auto cb = [&]() {
+            m_DumpCount.fetch_add(1, std::memory_order_release);
+        };
+        m_DumpCount = 0;
+        m_MaxDumpCount = mcctp::GetStagedDumpFileCount();
+      
+      mcctp::SetDumpCallback(cb);
+      //mcctp::SetDumpEndCallback(cb);
+
+      std::thread dump_thread([&]() {
+          m_IsAction.store(true, std::memory_order_release);
+          mcctp::DumpTexturePacks(m_DumpFormatFlag, m_CompressionFlag);
+          m_IsAction.store(false, std::memory_order_release);
+      }); 
+      //dump_thread.get_id();
+      dump_thread.detach();
+    }
+    else {
+
     }
 
     if (!can_dump)
@@ -228,6 +245,11 @@ void mcctp::StreamedImage::DoTextureViewer(void) {
       //             ImVec2(texture->GetWidth(), texture->GetHeight()));
 
       auto texture = m_TextureThumbnails.at(selected_thumbnail);
+      if (!texture->IsLoaded()) {
+          texture->Load();
+      }
+
+
       std::pair<ImVec2, ImVec2> window_coordinates;
       window_coordinates =
           (m_MaintainAspectRatio) ? GetScreenMaintainAspectRatio(texture->GetWidth(), texture->GetHeight()) : GetScreenFill();
@@ -303,14 +325,23 @@ void mcctp::StreamedImage::DoTextureViewer(void) {
           }
           selected_texture_pack = flag;
         }
+        if (flag == selected_texture_pack) {
+            rect_pos = last_rect_pos;
+            rect_size = last_rect_size;
+        }
       }
     }
     
-    ImU32 col = ImColor(ImGui::GetStyle().Colors[ImGuiCol_HeaderHovered]);
-    ImGui::RenderFrame(
-        rect_pos, ImVec2(rect_pos.x + ImGui::GetContentRegionMax().x, rect_pos.y + ImGui::GetTextLineHeight()),
-        col, false);
+    if (selected_texture_pack != mcctp::TexturePackFlags::None) {
+        ImVec4 header_hovered = ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered];
+        ImU32 col = ImColor(header_hovered.x, header_hovered.y, header_hovered.z, header_hovered.w);
+        
+        ImGui::RenderFrame(
+            rect_pos, ImVec2(rect_pos.x + ImGui::GetContentRegionMax().x, rect_pos.y + ImGui::GetTextLineHeight()),
+            col, false);
 
+        ImGui::RenderText(rect_pos, mcctp::FlagToBasename.at(selected_texture_pack).c_str());
+    }
     ImGui::EndChild();
 
     ImGui::SameLine();
@@ -331,7 +362,7 @@ void mcctp::StreamedImage::DoTextureViewer(void) {
           inst->GetResourcesFromTexturePack(selected_texture_pack);
       SortResources(resources);
       for (const auto &res : resources) {
-        auto thumbnail = std::make_shared<mcctp::Image>((TexturePackResource)res);
+        auto thumbnail = std::make_shared<mcctp::Image>((TexturePackResource)res, false);
 
         //thumbnail->Bind();
         //glActiveTexture(GL_TEXTURE0 + texture_unit);
@@ -343,7 +374,7 @@ void mcctp::StreamedImage::DoTextureViewer(void) {
       needs_load = false;
     }
 
-    int max_textures = 160;
+    int max_textures = 1000;
     int buttons_count = (m_TextureThumbnails.size() == 0)      ? 0
                         : (m_TextureThumbnails.size() < max_textures) ? m_TextureThumbnails.size()
                                                                : max_textures;
@@ -351,14 +382,39 @@ void mcctp::StreamedImage::DoTextureViewer(void) {
     ImVec2 button_sz(40 * 1.975, 40);
     ImGuiStyle &style1 = ImGui::GetStyle();
 
+    bool in_range = false;
     for (int n = 0; n < buttons_count; ++n) {
       ImGui::PushID(n);
       auto text = m_TextureThumbnails.at(n);
       ImVec2 start = ImGui::GetCursorScreenPos();
-      glBindTexture(GL_TEXTURE_2D, text->GetRendererID());
-      //if (ImGui::ImageButton((void *)(intptr_t)m_TextureThumbnails.at(n)->GetRendererID(),
-      //                       button_sz, ImVec2(), ImVec2()))
       auto wc = GetItemRectMaintainAspectRatio(text->GetWidth(), text->GetHeight(), button_sz);
+      
+      if (ImGui::IsRectVisible(button_sz)) {
+          if (!text->IsLoaded()) {
+              text->Load();
+          }
+
+          m_VisCount += 1;
+          if (!in_range) {
+              in_range = true;
+              m_VisStart = n;
+          }
+          else {
+              m_VisEnd = n;
+          }
+      }
+      else {
+          if (in_range) {
+              in_range = false;
+          }
+
+          if (!(n == selected_thumbnail) && 
+              text->IsLoaded()) {
+
+              text->Unload();
+          }
+
+      }
       if (ImGui::Button("", button_sz))
       {
         selected_thumbnail = n;
@@ -389,6 +445,38 @@ void mcctp::StreamedImage::DoTextureInfo(void) {
       ImGui::Text("Format: %s", ResourceFormatToString.at(texture->GetFormat()).c_str());
       ImGui::Text("Origin: %p", (void *)texture->GetOrigin());
       ImGui::Text("Offset: %p", (void *)(texture->GetOrigin() + texture->GetOffset()));
+    }
+    ImGui::End();
+}
+
+void mcctp::StreamedImage::DoDebugInfo(void)
+{
+    ImGui::Begin("Debug Info");
+    ImGui::Text("Visible Count: %d", m_VisCount);
+    ImGui::Text("Visible Range: [%d, %d]", m_VisStart, m_VisEnd);
+    ImGui::End();
+}
+
+void mcctp::StreamedImage::DoStatusBar(void)
+{
+    ImGuiWindowFlags window_flags =
+        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_MenuBar;
+    float height = ImGui::GetFrameHeight();
+
+    if (ImGui::BeginViewportSideBar("##MainStatusBar", NULL, ImGuiDir_Down, height, window_flags)) {
+        if (ImGui::BeginMenuBar()) {
+            static float progress = 0.0f, progress_dir = 1.0f;
+            if (m_IsAction) {
+                ImGui::Text("Dumping ... ");
+                progress = (((float)m_DumpCount.load(std::memory_order_relaxed)) / m_MaxDumpCount);
+                ImGui::ProgressBar(progress, ImVec2(0.0f, 0.0f));
+            }
+            else {
+                progress = 0.0f, progress_dir = 1.0f;
+                ImGui::Text("Happy status bar");
+            }
+            ImGui::EndMenuBar();
+        }
     }
     ImGui::End();
 }

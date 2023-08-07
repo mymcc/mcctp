@@ -119,6 +119,16 @@ void main() {
         return true;
     }
 
+    void SetDumpCallback(std::function<void()> callback)
+    {
+        ctx::Instance()->SetDumpCallback(callback);
+    }
+
+    void SetDumpEndCallback(std::function<void()> callback)
+    {
+        ctx::Instance()->SetDumpEndCallback(callback);
+    }
+
     bool DumpTexturePacks(DumpFormatFlags dump_format, DumpCompressionFlags compression_flag) {
         TexturePackField field = ctx::Instance()->GetField();
         for (uint8_t i = 0; i < TexturePackCount; ++i) {
@@ -136,6 +146,19 @@ void main() {
             TexturePackFlags flag = (TexturePackFlags)(1 << i);
             ctx::Instance()->DeleteTexturePackDump(flag);
         }
+    }
+
+    int GetStagedDumpFileCount(void)
+    {
+        int sum = 0;
+        TexturePackField field = ctx::Instance()->GetField();
+        for (uint8_t i = 0; i < TexturePackCount; ++i) {
+            TexturePackFlags flag = (TexturePackFlags)(1 << i);
+            if (field.HasFlag(flag)) {
+                sum += FlagToFileCount.at(flag);
+            }
+        }
+        return sum;
     }
 
     GLuint RenderDDSToTexture(TexturePackResource res) { 
@@ -300,6 +323,16 @@ void main() {
         wglMakeCurrent(NULL, NULL);
         bool res = wglShareLists(hrc, m_hRC);
         return res;
+    }
+
+    void ctx::SetDumpCallback(std::function<void()> callback)
+    {
+        m_DumpCallback = callback;
+    }
+
+    void ctx::SetDumpEndCallback(std::function<void()> callback)
+    {
+        m_DumpEndCallback = callback;
     }
 
     FileMapping::FileMapping(std::wstring path, uint64_t file_flags, uint64_t page_flags, uint64_t view_flags) {
@@ -779,8 +812,10 @@ void main() {
                             res.Width, res.Height, 4, static_cast<uint32_t>(compression_flag));
                     }
                 }
+                if (m_DumpCallback) m_DumpCallback();
             }
         }
+        if (m_DumpEndCallback) m_DumpEndCallback();
         return true;
     }
     bool ctx::DeleteTexturePackDump(TexturePackFlags flag) {

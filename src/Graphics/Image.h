@@ -1,14 +1,18 @@
 namespace mcctp {
 class Image {
 public:
-  Image(TexturePackResource res);
+  Image(TexturePackResource res, bool load_immediately = true);
   Image(std::vector<uint8_t> &data, uint32_t width, uint32_t height, uint32_t channels);
   Image(unsigned char* data, uint32_t width, uint32_t height, uint32_t channels);
   ~Image();
 
+  void Load(void);
+  void Unload(void);
+
   void Bind(void)   const { glBindTexture(GL_TEXTURE_2D, m_RendererID); }
   void Unbind(void) const { glBindTexture(GL_TEXTURE_2D, 0); }
 
+  bool IsLoaded(void) const { return m_Isloaded; }
   unsigned int GetWidth(void) const  { return m_Resource.Width; };
   unsigned int GetHeight(void) const { return m_Resource.Height; };
   std::string GetName(void) const { return m_Resource.Name; }
@@ -32,5 +36,6 @@ private:
 private:
   GLuint m_RendererID;
   TexturePackResource m_Resource;
+  bool m_Isloaded;
 };
 }

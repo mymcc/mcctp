@@ -203,7 +203,7 @@ void Application::Init() {
 
   // Setup Platform/Renderer backends
   ImGui_ImplWin32_InitForOpenGL(m_hHWND);
-  ImGui_ImplOpenGL3_Init();
+  ImGui_ImplOpenGL3_Init("#version 330 core");
 
   if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
     ImGuiPlatformIO &platform_io = ImGui::GetPlatformIO();
