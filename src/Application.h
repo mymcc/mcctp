@@ -44,7 +44,13 @@ class Application {
     void StartNewAppFrame();
     void RenderAppFrame();
 
+    void FixTimestep();
+
+  private:
     void CenterWindow();
+    void ApplyBorderlessFrame();
+    void ApplyBgColors();
+
 
   private:
     HWND m_hHWND;
@@ -53,5 +59,7 @@ class Application {
     ApplicationSpecification m_Specification;
     std::vector<std::shared_ptr<mcctp::Layer>> m_LayerStack;
     bool m_Running = false;
+
+    HANDLE m_hFrameIRTimer;
 };
 } // namespace mcctp

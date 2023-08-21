@@ -93,6 +93,16 @@ void CleanupDeviceWGL(HWND hWnd, WGL_WindowData *data) {
     ::ReleaseDC(hWnd, data->hDC);
 }
 
+extern void ImGui_ImplWin32_CreateWindow(ImGuiViewport* viewport);
+
+
+static void Hook_Platform_CreateWindow(ImGuiViewport* viewport) {
+    ImGui_ImplWin32_CreateWindow(viewport);
+
+    HWND* hwnd = reinterpret_cast<HWND*>(static_cast<char*>(viewport->PlatformUserData));
+}
+
+
 static void Hook_Renderer_CreateWindow(ImGuiViewport *viewport) {
     assert(viewport->RendererUserData == NULL);
 
@@ -130,7 +140,10 @@ Application::Application(const ApplicationSpecification &applicationSpecificatio
                                                   applicationSpecification.Height);
 
     Init();
+
     CenterWindow();
+    ApplyBorderlessFrame();
+    ApplyBgColors();
 
     PushLayer<StreamedImage>();
 
@@ -145,23 +158,16 @@ void Application::Run() {
     bool done = false;
 
     MSG msg;
-    ImVec4 clear_color = ImVec4(.0f, .0f, .0f, 0.f);
+    ImVec4 clear_color = ImVec4(.0f, .0f, .0f, .0f);
 
     static float dt = 0.0f;
     float frame_time = 0.0f;
     static int desired_fr = 120;
-    mcctp::utils::Timer clock;
+
     static bool performance_mode = true;
-
-    ImVec4 menu_col = ImGui::GetStyle().Colors[ImGuiCol_MenuBarBg];
-    menu_col.w = 150.f / 255.f;
-    ImGui::GetStyle().Colors[ImGuiCol_MenuBarBg] = menu_col;
-
-    ImVec4 win_col = ImGui::GetStyle().Colors[ImGuiCol_WindowBg];
-    win_col.w = 96.f / 255.f;
-    ImGui::GetStyle().Colors[ImGuiCol_WindowBg] = win_col;
-
+    mcctp::utils::Timer clock;
     clock.Reset();
+
     while (!done) {
         while (::PeekMessage(&msg, NULL, 0U, 0U, PM_REMOVE)) {
             ::TranslateMessage(&msg);
@@ -175,8 +181,11 @@ void Application::Run() {
         static auto render = [&]() {
             StartNewAppFrame();
             {
-                for (auto &layer : m_LayerStack)
-                    layer->OnUpdate(frame_time);
+                // Update layers
+                {
+                    for (auto& layer : m_LayerStack)
+                        layer->OnUpdate(frame_time);
+                }
 
                 // Dockspace
                 {
@@ -184,130 +193,55 @@ void Application::Run() {
                                                  ImGuiDockNodeFlags_PassthruCentralNode);
                 }
 
-                // App Layers
+                // Draw Layers
                 {
                     for (auto &layer : m_LayerStack)
                         layer->OnUIRender();
-                }
-
-                // Demo
-                { ImGui::ShowDemoWindow(); }
-
-                ImGuiWindowFlags window_flags =
-                    ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoDocking |
-                    ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoFocusOnAppearing |
-                    ImGuiWindowFlags_NoNav;
-                {
-                    if (ImGui::Begin("Borderless Settings", 0, window_flags)) {
-                        static SmartProperty<INT> window_mode{1};
-                        ImGui::RadioButton("Windowed", &window_mode.m_Value, 0);
-                        ImGui::RadioButton("Borderless", &window_mode.m_Value, 1);
-                        if (window_mode.update())
-                            m_Window->set_borderless(window_mode.m_Value);
-                    }
-                    ImGui::End();
-                }
-
-                // Borderless Demo
-                {
-                    // DWM api is undocumented, and has varying behavior between
-                    // Windows Releases Therefore Accent Flags and Animation
-                    // Flags are essentially trial and error :) On my system,
-                    // Accent Flags set to 1 allows for the desired effects in
-                    // regards to Accent State.
-                    //
-                    // These are just default values that achieve the desired
-                    // effect on my system Windows 10 Build 19044
-
-                    ImGui::Begin("DWM Accent State", 0, window_flags);
-                    static SmartProperty<INT> accent_policy{ACCENT_ENABLE_BLURBEHIND};
-                    ImGui::SeparatorText("DWM Accent State");
-                    ImGui::RadioButton("DISABLED", &accent_policy.m_Value, ACCENT_DISABLED);
-                    ImGui::RadioButton("GRADIENT", &accent_policy.m_Value, ACCENT_ENABLE_GRADIENT);
-                    ImGui::RadioButton("TRANSPARENT GRADIENT", &accent_policy.m_Value,
-                                       ACCENT_ENABLE_TRANSPARENTGRADIENT);
-                    ImGui::RadioButton("BLUR BEHIND", &accent_policy.m_Value,
-                                       ACCENT_ENABLE_BLURBEHIND);
-                    ImGui::RadioButton("ACRYLIC BLUR BEHIND", &accent_policy.m_Value,
-                                       ACCENT_ENABLE_ACRYLICBLURBEHIND);
-                    ImGui::RadioButton("HOST BACKDROP", &accent_policy.m_Value,
-                                       ACCENT_ENABLE_HOSTBACKDROP);
-                    ImGui::RadioButton("INVALID STATE", &accent_policy.m_Value,
-                                       ACCENT_INVALID_STATE);
-                    ImGui::End();
-
-                    ImGui::Begin("DWM Accent Flags", 0, window_flags);
-                    ImGui::SeparatorText("DWM Accent Flags");
-                    static SmartProperty<INT> accent_flags{1};
-                    ImGui::SliderInt("Accent Flags", &accent_flags.m_Value, 0, 255);
-                    ImGui::End();
-
-                    ImGui::Begin("DWM Gradient", 0, window_flags);
-                    ImGui::SeparatorText("DWM Gradient");
-                    static ImVec4 color =
-                        ImVec4(114.0f / 255.0f, 144.0f / 255.0f, 154.0f / 255.0f, 200.0f / 255.0f);
-                    static SmartProperty<INT> gradient_col = {
-                        (((int)(color.w * 255)) << 24) | (((int)(color.z * 255)) << 16) |
-                        (((int)(color.y * 255)) << 8) | ((int)(color.x * 255))};
-                    ImGui::ColorPicker4("##picker", (float *)&color,
-                                        ImGuiColorEditFlags_NoSidePreview |
-                                            ImGuiColorEditFlags_NoSmallPreview);
-                    gradient_col.m_Value = (((int)(color.w * 255)) << 24) |
-                                           (((int)(color.z * 255)) << 16) |
-                                           (((int)(color.y * 255)) << 8) | ((int)(color.x * 255));
-                    ImGui::End();
-
-                    ImGui::Begin("DWM Animation id", 0, window_flags);
-                    ImGui::SeparatorText("DWM Animation id");
-                    static SmartProperty<INT> animation_id{0};
-                    ImGui::SliderInt("Accent Flags", &animation_id.m_Value, 0, 32);
-                    ImGui::End();
-
-                    accent_policy.update();
-                    accent_flags.update();
-                    gradient_col.update();
-                    animation_id.update();
-
-                    static bool init_accents = true; // to apply default initialization
-                    if (accent_policy.has_changed() || accent_flags.has_changed() ||
-                        gradient_col.has_changed() || animation_id.has_changed() || init_accents) {
-                        if (init_accents)
-                            init_accents = false;
-
-                        ACCENT_POLICY policy = {ACCENT_STATE(accent_policy.m_Value),
-                                                accent_flags.m_Value, gradient_col.m_Value,
-                                                animation_id.m_Value};
-
-                        const WINDOWCOMPOSITIONATTRIBDATA data = {WCA_ACCENT_POLICY, &policy,
-                                                                  sizeof(policy)};
-
-                        SetWindowCompositionAttribute(m_Window->m_hHWND.get(), &data);
-                    }
                 }
             }
             // Rendering
             RenderAppFrame();
 
+            int64_t COEFF{ -100'0 };
+            int64_t TIMEOUT{ 16'0 };
+            LARGE_INTEGER dueTime;
+
+            if (GetActiveWindow() == NULL) {
+                desired_fr = 10;
+                TIMEOUT = 9'00;
+            }
+            else {
+                desired_fr = 60;
+            }
+
+            dueTime.QuadPart = TIMEOUT * COEFF;
+            
+            if (!m_Window->is_in_size_move()) {
+                if (SetWaitableTimerEx(m_hFrameIRTimer, &dueTime, 0, 0, 0, nullptr, 0) == FALSE)
+                {
+                    DWORD err = GetLastError();
+                    std::cerr << "Failed to set timer, error code = " << err << std::endl;
+                    CloseHandle(m_hFrameIRTimer);
+                    __debugbreak();
+                }
+
+                DWORD result = WaitForSingleObjectEx(m_hFrameIRTimer, INFINITE, TRUE);
+                if (!(result == WAIT_OBJECT_0)) {
+                    __debugbreak();
+                }
+            }
+            
             // Frame-rate limiter
             float desired_frame_time = (1000.0f / (desired_fr * 1000.0f));
             dt += clock.Elapsed();
             if (performance_mode) {
+                mcctp::utils::Timer splt;
                 while (dt <= desired_frame_time) {
-                    mcctp::utils::Timer splt;
-                    // Yeah yeah giving up cpu time is 'spensive but the cpu
-                    // load reduction here is epic
-                    LONGLONG ns = ((
-                        ((((1000.0f / (desired_fr * 1000.0f)) - dt) * 1000000000LL) / 100) * 100));
-                    if (ns > 0) {
-                        // assert(qnanosleep(ns) != FALSE);
-                        mcctp::utils::qnanosleep(ns);
-                    }
                     dt += splt.Elapsed();
                 }
             }
             frame_time = dt;
             dt = 0.0f;
-
             clock.Reset();
         };
 
@@ -330,7 +264,16 @@ Application *Application::Instance() {
 }
 
 void Application::Init() {
-    ImGui_ImplWin32_EnableDpiAwareness();
+
+    ULONG currentRes;
+    NtSetTimerResolution(5000, TRUE, &currentRes);
+
+    m_hFrameIRTimer = CreateWaitableTimerExW(nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
+    if (m_hFrameIRTimer == NULL) {
+        DWORD err = GetLastError();
+        std::cerr << "Failed to create a high resolution waitable timer with a name, error code = " << err << std::endl;
+        std::exit(1);
+    }
 
     if (!::CreateDeviceWGL(m_Window->m_hHWND.get(), &g_MainWindow)) {
         ::CleanupDeviceWGL(m_Window->m_hHWND.get(), &g_MainWindow);
@@ -375,12 +318,13 @@ void Application::Init() {
         IM_ASSERT(platform_io.Renderer_DestroyWindow == NULL);
         IM_ASSERT(platform_io.Renderer_SwapBuffers == NULL);
         IM_ASSERT(platform_io.Platform_RenderWindow == NULL);
+        platform_io.Platform_CreateWindow = Hook_Platform_CreateWindow;
+
         platform_io.Renderer_CreateWindow = Hook_Renderer_CreateWindow;
         platform_io.Renderer_DestroyWindow = Hook_Renderer_DestroyWindow;
         platform_io.Renderer_SwapBuffers = Hook_Renderer_SwapBuffers;
         platform_io.Platform_RenderWindow = Hook_Platform_RenderWindow;
     }
-
     ImFontConfig fontConfig;
     fontConfig.FontDataOwnedByAtlas = false;
     // ImFont* robotoFont =
@@ -390,8 +334,7 @@ void Application::Init() {
     // io.FontDefault = robotoFont;
     io.FontDefault = myriadPro;
 }
-void Application::Shutdown() {
-}
+void Application::Shutdown() {}
 void Application::StartNewAppFrame() {
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplWin32_NewFrame();
@@ -448,6 +391,12 @@ void Application::RenderAppFrame() {
 
     // Blit
     ::SwapBuffers(g_MainWindow.hDC);
+
+    ImGui_ImplWin32_EnableAlphaCompositing(m_Window->m_hHWND.get());
+    ImGui_ImplWin32_EnableDpiAwareness();
+}
+void Application::FixTimestep()
+{
 }
 void Application::CenterWindow() {
     RECT rect;
@@ -463,5 +412,29 @@ void Application::CenterWindow() {
     int y = (screen_height - window_height) / 2;
 
     SetWindowPos(m_Window->m_hHWND.get(), NULL, x, y, 0, 0, SWP_NOZORDER | SWP_NOSIZE);
+}
+void Application::ApplyBorderlessFrame()
+{
+    static ImVec4 color =
+        ImVec4(114.0f / 255.0f, 144.0f / 255.0f, 154.0f / 255.0f, 200.0f / 255.0f);
+    ACCENT_POLICY policy = { ACCENT_STATE(ACCENT_ENABLE_BLURBEHIND),
+                                1, (((int)(color.w * 255)) << 24) | (((int)(color.z * 255)) << 16) |
+        (((int)(color.y * 255)) << 8) | ((int)(color.x * 255)),
+                                0 };
+
+    const WINDOWCOMPOSITIONATTRIBDATA data = { WCA_ACCENT_POLICY, &policy,
+                                              sizeof(policy) };
+
+    SetWindowCompositionAttribute(m_Window->m_hHWND.get(), &data);
+}
+void Application::ApplyBgColors()
+{
+    ImVec4 menu_col = ImGui::GetStyle().Colors[ImGuiCol_MenuBarBg];
+    menu_col.w = 150.f / 255.f;
+    ImGui::GetStyle().Colors[ImGuiCol_MenuBarBg] = menu_col;
+
+    ImVec4 win_col = ImGui::GetStyle().Colors[ImGuiCol_WindowBg];
+    win_col.w = 96.f / 255.f;
+    ImGui::GetStyle().Colors[ImGuiCol_WindowBg] = win_col;
 }
 } // namespace mcctp

@@ -37,6 +37,8 @@ public:
 
     UINT get_width() CONST;
     UINT get_height() CONST;
+    BOOL is_in_size_move() CONST;
+
 
     unique_handle m_hHWND;
     LPWSTR m_wstrWC;
@@ -58,5 +60,6 @@ private:
     BOOL m_bBorderless_resize  = TRUE; // should the window allow resizing by dragging the borders while borderless
     BOOL m_bBorderless_drag    = TRUE; // should the window allow moving my dragging the client area
     BOOL m_bBorderless_shadow  = TRUE; // should the window display a native aero shadow while borderless
+    BOOL m_bIsInSizeMove       = FALSE;
 };
 

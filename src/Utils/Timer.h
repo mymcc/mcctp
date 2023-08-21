@@ -13,7 +13,8 @@ public:
                .count() *
            0.001f * 0.001f * 0.001f;
   }
-
+  
+  float ElapsedMicros() { return Elapsed() * 1000.0f * 1000.0f; }
   float ElapsedMillis() { return Elapsed() * 1000.0f; }
 
 private:

@@ -379,12 +379,18 @@ FileMapping &FileMapping::operator=(FileMapping &&other) noexcept {
 }
 
 FileMapping::~FileMapping() {
-    if (lpMap != NULL)
+    if (lpMap != NULL) {
         UnmapViewOfFile(lpMap);
+    }
     if (hMap != NULL)
+    {
         CloseHandle(hMap);
+    }
     if (hFile != INVALID_HANDLE_VALUE)
+    {
         CloseHandle(hFile);
+        std::cout << "FILEMAPPING DESTRUCTOR()\n";
+    }
 }
 bool FileMapping::TryCreateMapping(std::wstring path, uint64_t file_flags, uint64_t page_flags,
                                    uint64_t view_flags) {

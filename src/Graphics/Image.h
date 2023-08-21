@@ -23,9 +23,7 @@ public:
   size_t GetSize(void) const { return m_Resource.Size; }
   ResourceFormat GetFormat(void) const { return m_Resource.Format; }
   TexturePackType GetPackType(void) const { return m_Resource.PackType; }
-
-  GLuint GetRendererID(void) const { return m_RendererID; };
-
+  GLuint GetRendererID(void) const { return m_RendererID; }
 private:
   GLuint CreateTexture(TexturePackResource res);
   GLuint CreateTexture(std::vector<uint8_t> &data, uint32_t width, uint32_t height,

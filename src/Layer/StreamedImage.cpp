@@ -55,18 +55,17 @@ void mcctp::StreamedImage::OnUpdate(float ts) {
 }
 
 void mcctp::StreamedImage::OnUIRender() {
-    
     if (show_demo) {
       ImGui::ShowDemoWindow();
     }
 
     DoMainMenuBar();
 
-    
     ImGui::Begin("Instance Configuration");
 
     DoInstanceConfiguration();
     DoTexturePackDumper();
+
     ImGui::End();
 
     DoTextureViewer();
@@ -118,7 +117,6 @@ void mcctp::StreamedImage::DoMainMenuBar(void) {
     }
     ImGui::EndMainMenuBar();
     
-
     ImGuiWindowFlags window_flags =
         ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_MenuBar;
     float height = ImGui::GetFrameHeight();
@@ -236,26 +234,26 @@ void mcctp::StreamedImage::DoTextureViewer(void) {
     static float scale = 1.0f;
     //ImGui::SliderFloat("Scale", &scale, 1.0f, 20.0f);
     if (m_TextureThumbnails.size() != 0) {
-      //auto texture = m_TextureThumbnails.at(selected_thumbnail);
-      //ImGui::Image((ImTextureID)(intptr_t)texture->GetRendererID(),
-      //             ImVec2(texture->GetWidth(), texture->GetHeight()));
 
       auto& texture = m_TextureThumbnails.at(selected_thumbnail);
       if (!texture->IsLoaded()) {
           texture->Load();
       }
 
-
       std::pair<ImVec2, ImVec2> window_coordinates;
       window_coordinates =
-          (m_MaintainAspectRatio) ? GetScreenMaintainAspectRatio(texture->GetWidth(), texture->GetHeight()) : GetScreenFill();
+          (m_MaintainAspectRatio) ? GetScreenMaintainAspectRatio(texture->GetWidth(), 
+              texture->GetHeight()) : GetScreenFill();
 
       //ImGui::Image((ImTextureID)(intptr_t)texture->GetRendererID(),
       //             ImVec2(640, 360));
+
       float w = (window_coordinates.second.x - window_coordinates.first.x);
       float h = (window_coordinates.second.y - window_coordinates.first.y);
+
       float xx = ((w * scale) - w) / 2.0f;
       float yy = ((h * scale) - h) / 2.0f;
+
       window_coordinates.first.x -= xx;
       window_coordinates.second.x += xx;
       window_coordinates.first.y -= yy;
@@ -265,14 +263,15 @@ void mcctp::StreamedImage::DoTextureViewer(void) {
       ImVec2 rect = ImGui::GetContentRegionAvail();
       ImVec2 end(ImGui::GetWindowSize());
       ImVec2 spos = ImGui::GetCursorScreenPos();
+
       rect.x += spos.x;
       rect.y += spos.y;
+
       ImGui::GetWindowDrawList()->AddRect(spos, rect, ImGui::GetColorU32(ImVec4(0.3f, 0.3f, 0.7f, 1.0f)));
       ImGui::GetWindowDrawList()->PushClipRect(spos, rect, false);
       ImGui::GetWindowDrawList()->AddImage((void *)texture->GetRendererID(),
-                                           window_coordinates.first, window_coordinates.second,
-          ImVec2(0 ,0), ImVec2(1, 1));
-      //ImVec2(0 - (1 - scale), 0 - (1 - scale)), ImVec2(1 + (1 - scale), 1 + (1 - scale)));
+                                           window_coordinates.first, window_coordinates.second, ImVec2(0 ,0), ImVec2(1, 1));
+
       ImGui::GetWindowDrawList()->PopClipRect();
 
     } else {
@@ -280,7 +279,6 @@ void mcctp::StreamedImage::DoTextureViewer(void) {
             (ImTextureID)(intptr_t)0,
           ImGui::GetContentRegionAvail());
     }
-
     ImGui::End();
 
     ImGui::Begin("Texture Explorer");

@@ -197,12 +197,17 @@ VOID BorderlessWindow::set_client_area(std::vector<RECT>&& client_rects)
 
 UINT BorderlessWindow::get_width() const
 {
-	return 0;
+	return m_uWidth;
 }
 
 UINT BorderlessWindow::get_height() const
 {
-	return 0;
+	return m_uHeight;
+}
+
+BOOL BorderlessWindow::is_in_size_move() const
+{
+	return m_bIsInSizeMove;
 }
 
 #ifdef BORDERLESS_USE_IMGUI
@@ -323,9 +328,17 @@ LRESULT BorderlessWindow::WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpa
 			break;
 		case WM_ENTERSIZEMOVE: {
 			int n = SetTimer(hwnd, (UINT_PTR)&timer_id, USER_TIMER_MINIMUM, NULL);
+			auto it = s_BorderlessInstanceMap.find(hwnd);
+			if (it != s_BorderlessInstanceMap.end() && it->second) {
+				it->second->m_bIsInSizeMove = TRUE;
+			}
 			return 0;
 		}
 		case WM_EXITSIZEMOVE: {
+			auto it = s_BorderlessInstanceMap.find(hwnd);
+			if (it != s_BorderlessInstanceMap.end() && it->second) {
+				it->second->m_bIsInSizeMove = FALSE;
+			}
 			KillTimer(hwnd, (UINT_PTR)&timer_id);
 			return 0;
 		}
