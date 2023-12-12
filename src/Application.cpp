@@ -97,9 +97,15 @@ extern void ImGui_ImplWin32_CreateWindow(ImGuiViewport* viewport);
 
 
 static void Hook_Platform_CreateWindow(ImGuiViewport* viewport) {
-    ImGui_ImplWin32_CreateWindow(viewport);
+    //ImGui_ImplWin32_CreateWindow(viewport);
 
-    HWND* hwnd = reinterpret_cast<HWND*>(static_cast<char*>(viewport->PlatformUserData));
+    //HWND* hwnd = reinterpret_cast<HWND*>(static_cast<char*>(viewport->PlatformUserData));
+
+    assert(viewport->RendererUserData == NULL);
+
+    WGL_WindowData *data = IM_NEW(WGL_WindowData);
+    CreateDeviceWGL((HWND)viewport->PlatformHandle, data);
+    viewport->RendererUserData = data;
 }
 
 
@@ -170,6 +176,7 @@ void Application::Run() {
 
     while (!done) {
         while (::PeekMessage(&msg, NULL, 0U, 0U, PM_REMOVE)) {
+        //while (::GetMessage(&msg, NULL, 0U, 0U)) {
             ::TranslateMessage(&msg);
             ::DispatchMessage(&msg);
             if (msg.message == WM_QUIT)
