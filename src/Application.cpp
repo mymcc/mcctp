@@ -139,9 +139,10 @@ static void Hook_Renderer_SwapBuffers(ImGuiViewport *viewport, void *) {
 }
 
 extern bool g_ApplicationRunning;
-
 namespace mcctp {
+
 Application::Application(const ApplicationSpecification &applicationSpecification) {
+    ImGui_ImplWin32_EnableDpiAwareness();
     m_Window = std::make_unique<BorderlessWindow>(applicationSpecification.Width,
                                                   applicationSpecification.Height);
 
@@ -261,6 +262,8 @@ void Application::Run() {
 
         render(); // render when we leave message loop
     }
+
+    g_ApplicationRunning = false;
 }
 
 void Application::Close() {
@@ -315,17 +318,18 @@ void Application::Init() {
         style.Colors[ImGuiCol_WindowBg].w = 1.0f;
     }
 
+    //DwmEnableMMCSS(TRUE);
     // Setup Platform/Renderer backends
+    
     ImGui_ImplWin32_InitForOpenGL(m_Window->m_hHWND.get());
     ImGui_ImplOpenGL3_Init();
-
+    float dpiscale = ImGui_ImplWin32_GetDpiScaleForHwnd(m_Window->m_hHWND.get());
     if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
         ImGuiPlatformIO &platform_io = ImGui::GetPlatformIO();
         IM_ASSERT(platform_io.Renderer_CreateWindow == NULL);
         IM_ASSERT(platform_io.Renderer_DestroyWindow == NULL);
         IM_ASSERT(platform_io.Renderer_SwapBuffers == NULL);
         IM_ASSERT(platform_io.Platform_RenderWindow == NULL);
-        platform_io.Platform_CreateWindow = Hook_Platform_CreateWindow;
 
         platform_io.Renderer_CreateWindow = Hook_Renderer_CreateWindow;
         platform_io.Renderer_DestroyWindow = Hook_Renderer_DestroyWindow;
@@ -337,7 +341,7 @@ void Application::Init() {
     // ImFont* robotoFont =
     // io.Fonts->AddFontFromMemoryTTF((void*)g_RobotoRegular,
     // sizeof(g_RobotoRegular), 20.0f, &fontConfig);
-    ImFont *myriadPro = io.Fonts->AddFontFromFileTTF("MyriadPro-Light.ttf", 16.0f);
+    ImFont *myriadPro = io.Fonts->AddFontFromFileTTF("MyriadPro-Light.ttf", 16.0f * dpiscale);
     // io.FontDefault = robotoFont;
     io.FontDefault = myriadPro;
 }
@@ -349,9 +353,11 @@ void Application::StartNewAppFrame() {
 }
 void Application::RenderAppFrame() {
     // Render
+    ImGui::ShowDemoWindow();
     ImGui::Render();
     glClearColor(0, 0, 0, 0);
     glClear(GL_COLOR_BUFFER_BIT);
+    glViewport(0, 0, m_Window->get_width(), m_Window->get_height());
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
     // Update imgui window rects for hit testing
@@ -367,20 +373,21 @@ void Application::RenderAppFrame() {
         if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
             origin = {0, 0};
         }
-
+        //##MainMenuBar
         // Add imgui windows that aren't default rects/dockspaces/etc to client
         // area whitelist, but explicitly include imgui demo
         std::vector<RECT> WindowRects;
         for (ImGuiWindow *window : ImGui::GetCurrentContext()->Windows) {
             if ((!(std::string(window->Name).find("Default") != std::string::npos) &&
-                 (!(std::string(window->Name).find("Dock") != std::string::npos)) &&
-                 (!(std::string(window->Name).find("Menu") != std::string::npos))) ||
-                (std::string(window->Name).find("Dear ImGui Demo") != std::string::npos)) {
+                 (!(std::string(window->Name).find("Dock") != std::string::npos)) ||
+                (std::string(window->Name).find("Dear ImGui Demo") != std::string::npos))) {
                 ImVec2 pos = window->Pos;
                 ImVec2 size = window->Size;
                 RECT rect = {origin.x + pos.x, origin.y + pos.y, origin.x + (pos.x + size.x),
                              origin.y + (pos.y + size.y)};
-                WindowRects.push_back(rect);
+
+                if (window->Active)
+                    WindowRects.push_back(rect);
             }
         }
         m_Window->set_client_area(WindowRects);
@@ -400,7 +407,7 @@ void Application::RenderAppFrame() {
     ::SwapBuffers(g_MainWindow.hDC);
 
     ImGui_ImplWin32_EnableAlphaCompositing(m_Window->m_hHWND.get());
-    ImGui_ImplWin32_EnableDpiAwareness();
+    //ImGui_ImplWin32_EnableDpiAwareness();
 }
 void Application::FixTimestep()
 {

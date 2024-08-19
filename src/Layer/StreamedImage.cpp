@@ -115,7 +115,14 @@ void mcctp::StreamedImage::DoMainMenuBar(void) {
       ImGui::MenuItem("Create");
       ImGui::EndMenu();
     }
+    if (ImGui::Button("X"))
+    {
+        PostQuitMessage(0);
+    }
+
+    ImGui::GetCurrentWindow()->Size.x -= ImGui::GetContentRegionAvail().x;
     ImGui::EndMainMenuBar();
+
     
     ImGuiWindowFlags window_flags =
         ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_MenuBar;

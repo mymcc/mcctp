@@ -14,408 +14,430 @@
 
 namespace 
 {
-	static UINT timer_id = 0;
-	static std::unordered_map<HWND, BorderlessWindow*> s_BorderlessInstanceMap;
+    static UINT timer_id = 0;
+    static std::unordered_map<HWND, BorderlessWindow*> s_BorderlessInstanceMap;
 
-	enum class Style : DWORD 
-	{
-		windowed = WS_OVERLAPPEDWINDOW | WS_THICKFRAME | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX,
-		aero_borderless = WS_POPUP | WS_THICKFRAME | WS_CAPTION | WS_SYSMENU | WS_MAXIMIZEBOX | WS_MINIMIZEBOX,
-		basic_borderless = WS_POPUP | WS_THICKFRAME | WS_SYSMENU | WS_MAXIMIZEBOX | WS_MINIMIZEBOX
-	};
+    enum class Style : DWORD 
+    {
+        windowed = WS_OVERLAPPEDWINDOW | WS_THICKFRAME | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX,
+        aero_borderless = WS_POPUP | WS_THICKFRAME | WS_CAPTION | WS_SYSMENU | WS_MAXIMIZEBOX | WS_MINIMIZEBOX,
+        basic_borderless = WS_POPUP | WS_THICKFRAME | WS_SYSMENU | WS_MAXIMIZEBOX | WS_MINIMIZEBOX
+    };
 
-	BOOL is_maximized(HWND hwnd)
-	{
-		WINDOWPLACEMENT placement{};
-		if (!::GetWindowPlacement(hwnd, &placement)) return false;
-		return placement.showCmd == SW_MAXIMIZE;
-	}
+    BOOL is_maximized(HWND hwnd)
+    {
+        WINDOWPLACEMENT placement{};
+        if (!::GetWindowPlacement(hwnd, &placement)) return false;
+        return placement.showCmd == SW_MAXIMIZE;
+    }
 
-	BOOL is_composition_enabled()
-	{
-		BOOL composition_enabled = FALSE;
-		bool success = ::DwmIsCompositionEnabled(&composition_enabled) == S_OK;
-		return composition_enabled && success;
-	}
+    BOOL is_composition_enabled()
+    {
+        BOOL composition_enabled = FALSE;
+        bool success = ::DwmIsCompositionEnabled(&composition_enabled) == S_OK;
+        return composition_enabled && success;
+    }
 
-	Style select_borderless_style()
-	{
-		return is_composition_enabled() ? Style::aero_borderless : Style::basic_borderless;
-	}
+    Style select_borderless_style()
+    {
+        return is_composition_enabled() ? Style::aero_borderless : Style::basic_borderless;
+    }
 
-	VOID set_shadow(HWND handle, BOOL enabled)
-	{
-		if (is_composition_enabled()) 
-		{
-			static CONST MARGINS shadow_state[2]{ { 0,0,0,0 },{ 1,1,1,1 } };
-			::DwmExtendFrameIntoClientArea(handle, &shadow_state[enabled]);
-		}
-	}
+    VOID set_shadow(HWND handle, BOOL enabled)
+    {
+        if (is_composition_enabled()) 
+        {
+            static CONST MARGINS shadow_state[2]{ { 0,0,0,0 },{ 1,1,1,1 } };
+            ::DwmExtendFrameIntoClientArea(handle, &shadow_state[enabled]);
+        }
+    }
 
-	VOID adjust_maximized_client_rect(HWND window, RECT& rect)
-	{
-		if (!is_maximized(window)) return;
+    VOID adjust_maximized_client_rect(HWND window, RECT& rect)
+    {
+        if (!is_maximized(window)) return;
 
-		HMONITOR monitor = ::MonitorFromWindow(window, MONITOR_DEFAULTTONULL);
-		if (!monitor) return;
+        HMONITOR monitor = ::MonitorFromWindow(window, MONITOR_DEFAULTTONULL);
+        if (!monitor) return;
 
-		MONITORINFO monitor_info{};
-		monitor_info.cbSize = sizeof(monitor_info);
-		if (!::GetMonitorInfoW(monitor, &monitor_info)) return;
+        MONITORINFO monitor_info{};
+        monitor_info.cbSize = sizeof(monitor_info);
+        if (!::GetMonitorInfoW(monitor, &monitor_info)) return;
 
-		// when maximized, make the client area fill just the monitor (without task bar) rect,
-		// not the whole window rect which extends beyond the monitor.
-		rect = monitor_info.rcWork;
-	}
+        // when maximized, make the client area fill just the monitor (without task bar) rect,
+        // not the whole window rect which extends beyond the monitor.
+        rect = monitor_info.rcWork;
+    }
 
-	std::system_error last_error(const std::string& msg)
-	{
-		return std::system_error(std::error_code(::GetLastError(), std::system_category()), msg);
-	}
+    std::system_error last_error(const std::string& msg)
+    {
+        return std::system_error(std::error_code(::GetLastError(), std::system_category()), msg);
+    }
 
-	CONST WCHAR* window_class(WNDPROC wndproc)
-	{
-		static CONST WCHAR* window_class_name = [&]
-		{
-			WNDCLASSEXW wcx{};
-			wcx.cbSize = sizeof(wcx);
-			wcx.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
-			wcx.hInstance = nullptr;
-			wcx.lpfnWndProc = wndproc;
-			wcx.lpszClassName = L"BorderlessWindowClass";
-			wcx.hbrBackground = NULL;
-			wcx.hCursor = ::LoadCursorW(nullptr, IDC_ARROW);
+    CONST WCHAR* window_class(WNDPROC wndproc)
+    {
+        static CONST WCHAR* window_class_name = [&]
+        {
+            WNDCLASSEXW wcx{};
+            wcx.cbSize = sizeof(wcx);
+            wcx.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
+            wcx.hInstance = nullptr;
+            wcx.lpfnWndProc = wndproc;
+            wcx.lpszClassName = L"BorderlessWindowClass";
+            wcx.hbrBackground = NULL;
+            wcx.hCursor = ::LoadCursorW(nullptr, IDC_ARROW);
 
-			const ATOM result = ::RegisterClassExW(&wcx);
-			if (!result) throw last_error("failed to register window class");
+            const ATOM result = ::RegisterClassExW(&wcx);
+            if (!result) throw last_error("failed to register window class");
 
-			return wcx.lpszClassName;
-		}();
+            return wcx.lpszClassName;
+        }();
 
-		return window_class_name;
-	}
+        return window_class_name;
+    }
+    void UpdateButtonLayoutForDpi(HWND hWnd,
+                                  int width, int height) {
+        int iDpi = GetDpiForWindow(hWnd);
+        int dpiScaledX = MulDiv(0, iDpi, USER_DEFAULT_SCREEN_DPI);
+        int dpiScaledY = MulDiv(0, iDpi, USER_DEFAULT_SCREEN_DPI);
+        int dpiScaledWidth = MulDiv(width, iDpi, USER_DEFAULT_SCREEN_DPI);
+        int dpiScaledHeight = MulDiv(height, iDpi, USER_DEFAULT_SCREEN_DPI);
 
-	unique_handle create_window(WNDPROC wndproc, void* userdata)
-	{
-		HWND handle = CreateWindowExW(0, window_class(wndproc), L"Borderless Window",
-			static_cast<DWORD>(Style::aero_borderless), CW_USEDEFAULT, CW_USEDEFAULT,
-			1280, 720, nullptr, nullptr, nullptr, userdata
-		);
+        SetWindowPos(hWnd, hWnd, dpiScaledX, dpiScaledY, dpiScaledWidth, dpiScaledHeight,
+                     SWP_NOZORDER | SWP_NOACTIVATE);
+    }
+    unique_handle create_window(WNDPROC wndproc, void* userdata)
+    {
+        HWND handle = CreateWindowExW(0, window_class(wndproc), L"Borderless Window",
+            static_cast<DWORD>(Style::aero_borderless), CW_USEDEFAULT, CW_USEDEFAULT,
+            1280, 720, nullptr, nullptr, nullptr, userdata
+        );
+        if (!handle) throw last_error("failed to create window");
+        //UpdateButtonLayoutForDpi(handle, 1280, 720);
 
-		if (!handle) throw last_error("failed to create window");
 
-
-		return unique_handle{ handle };
-	}
+        return unique_handle{ handle };
+    }
 }
 
 BorderlessWindow::BorderlessWindow()
-	: m_hHWND{ create_window(&this->BorderlessWindow::WndProc, this) }
+    : m_hHWND{ create_window(&this->BorderlessWindow::WndProc, this) }
 {
-	s_BorderlessInstanceMap.insert({ m_hHWND.get(), this });
-	GetClassNameW(m_hHWND.get(), m_wstrWC, 256);
-	set_composition(true);
-	set_borderless(true);
-	set_borderless_shadow(true);
-	::ShowWindow(m_hHWND.get(), SW_SHOW);
+    s_BorderlessInstanceMap.insert({ m_hHWND.get(), this });
+    GetClassNameW(m_hHWND.get(), m_wstrWC, 256);
+    set_composition(true);
+    set_borderless(true);
+    set_borderless_shadow(true);
+    ::ShowWindow(m_hHWND.get(), SW_SHOW);
 }
 
 BorderlessWindow::BorderlessWindow(unsigned int width, unsigned int height)
-	: m_hHWND{ create_window(&BorderlessWindow::WndProc, this) }
+    : m_hHWND{ create_window(&BorderlessWindow::WndProc, this) }
 {
-	s_BorderlessInstanceMap.insert({ m_hHWND.get(), this });
-	GetClassNameW(m_hHWND.get(), m_wstrWC, 256);
-	set_composition(true);
-	set_borderless(true);
-	set_borderless_shadow(true);
-	::ShowWindow(m_hHWND.get(), SW_SHOW);
+    s_BorderlessInstanceMap.insert({ m_hHWND.get(), this });
+    GetClassNameW(m_hHWND.get(), m_wstrWC, 256);
+    set_composition(true);
+    set_borderless(true);
+    set_borderless_shadow(true);
+    ::ShowWindow(m_hHWND.get(), SW_SHOW);
 
-	RECT r;
-	::GetWindowRect(m_hHWND.get(), &r);
-	::SetWindowPos(m_hHWND.get(), NULL, r.left, r.top, width, height, SWP_FRAMECHANGED);
+    RECT r;
+    ::GetWindowRect(m_hHWND.get(), &r);
+    ::SetWindowPos(m_hHWND.get(), NULL, r.left, r.top, width, height, SWP_FRAMECHANGED);
 }
 
 BorderlessWindow::BorderlessWindow(std::function<void()> render) 
-	: m_hHWND{ create_window(&BorderlessWindow::WndProc, this) }, m_fRender(render)
+    : m_hHWND{ create_window(&BorderlessWindow::WndProc, this) }, m_fRender(render)
 {
-	s_BorderlessInstanceMap.insert({ m_hHWND.get(), this });
-	GetClassNameW(m_hHWND.get(), m_wstrWC, 256);
-	set_composition(true);
-	set_borderless(true);
-	set_borderless_shadow(true);
-	::ShowWindow(m_hHWND.get(), SW_SHOW);
+    s_BorderlessInstanceMap.insert({ m_hHWND.get(), this });
+    GetClassNameW(m_hHWND.get(), m_wstrWC, 256);
+    set_composition(true);
+    set_borderless(true);
+    set_borderless_shadow(true);
+    ::ShowWindow(m_hHWND.get(), SW_SHOW);
 }
 
 VOID BorderlessWindow::set_composition(BOOL enabled)
 {
-	DWM_BLURBEHIND bb = { 0 };
-	HRGN hRgn = CreateRectRgn(0, 0, -1, -1);
-	bb.dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION;
-	bb.hRgnBlur = hRgn;
-	bb.fEnable = TRUE;
-	DwmEnableBlurBehindWindow(m_hHWND.get(), &bb);
+    DWM_BLURBEHIND bb = { 0 };
+    HRGN hRgn = CreateRectRgn(0, 0, -1, -1);
+    bb.dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION;
+    bb.hRgnBlur = hRgn;
+    bb.fEnable = TRUE;
+    DwmEnableBlurBehindWindow(m_hHWND.get(), &bb);
 }
 
 VOID BorderlessWindow::set_borderless(BOOL enabled)
 {
-	Style new_style = (enabled) ? select_borderless_style() : Style::windowed;
-	Style old_style = static_cast<Style>(::GetWindowLongPtrW(m_hHWND.get(), GWL_STYLE));
+    Style new_style = (enabled) ? select_borderless_style() : Style::windowed;
+    Style old_style = static_cast<Style>(::GetWindowLongPtrW(m_hHWND.get(), GWL_STYLE));
 
-	if (new_style != old_style) 
-	{
-		m_bBorderless = enabled;
+    if (new_style != old_style) 
+    {
+        m_bBorderless = enabled;
 
-		::SetWindowLongPtrW(m_hHWND.get(), GWL_STYLE, static_cast<LONG>(new_style));
+        ::SetWindowLongPtrW(m_hHWND.get(), GWL_STYLE, static_cast<LONG>(new_style));
 
-		// when switching between borderless and windowed, restore appropriate shadow state
-		set_shadow(m_hHWND.get(), m_bBorderless_shadow && (new_style != Style::windowed));
+        // when switching between borderless and windowed, restore appropriate shadow state
+        set_shadow(m_hHWND.get(), m_bBorderless_shadow && (new_style != Style::windowed));
 
-		// redraw frame
-		::SetWindowPos(m_hHWND.get(), nullptr, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE);
-		::ShowWindow(m_hHWND.get(), SW_SHOW);
-	}
+        // redraw frame
+        ::SetWindowPos(m_hHWND.get(), nullptr, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE);
+        ::ShowWindow(m_hHWND.get(), SW_SHOW);
+    }
 }
 
 VOID BorderlessWindow::set_borderless_shadow(BOOL enabled)
 {
-	if (m_bBorderless)
-	{
-		m_bBorderless_shadow = enabled;
-		set_shadow(m_hHWND.get(), enabled);
-	}
+    if (m_bBorderless)
+    {
+        m_bBorderless_shadow = enabled;
+        set_shadow(m_hHWND.get(), enabled);
+    }
 }
 
 VOID BorderlessWindow::set_client_area(std::vector<RECT>& client_rects)
 {
-	m_vClientRects = client_rects;
+    m_vClientRects = client_rects;
 }
 
 VOID BorderlessWindow::set_client_area(std::vector<RECT>&& client_rects)
 {
-	m_vClientRects = std::move(client_rects);
+    m_vClientRects = std::move(client_rects);
 }
 
 UINT BorderlessWindow::get_width() const
 {
-	return m_uWidth;
+    return m_uWidth;
 }
 
 UINT BorderlessWindow::get_height() const
 {
-	return m_uHeight;
+    return m_uHeight;
 }
 
 BOOL BorderlessWindow::is_in_size_move() const
 {
-	return m_bIsInSizeMove;
+    return m_bIsInSizeMove;
 }
 
 #ifdef BORDERLESS_USE_IMGUI
-	extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
-	std::function<LRESULT(HWND, UINT, WPARAM, LPARAM)> BorderlessWindow::m_ImGui_ImplWin32_WndProcHandler = ImGui_ImplWin32_WndProcHandler;
+    extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+    std::function<LRESULT(HWND, UINT, WPARAM, LPARAM)> BorderlessWindow::m_ImGui_ImplWin32_WndProcHandler = ImGui_ImplWin32_WndProcHandler;
 #else
-	std::function<LRESULT(HWND, UINT, WPARAM, LPARAM)> BorderlessWindow::m_ImGui_ImplWin32_WndProcHandler;
+    std::function<LRESULT(HWND, UINT, WPARAM, LPARAM)> BorderlessWindow::m_ImGui_ImplWin32_WndProcHandler;
 #endif
 
 LRESULT BorderlessWindow::WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
 #ifdef BORDERLESS_USE_IMGUI
-	if (m_ImGui_ImplWin32_WndProcHandler(hwnd, msg, wparam, lparam))
-		return true;
+        if (m_ImGui_ImplWin32_WndProcHandler(hwnd, msg, wparam, lparam))
+            return true;
 #endif
+    if (msg == WM_NCCREATE) {
+        auto userdata = reinterpret_cast<CREATESTRUCTW*>(lparam)->lpCreateParams;
+        // store window instance pointer in window user data
+        ::SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(userdata));
+        //EnableNonClientDpiScaling(hwnd);
+    }
 
-	if (msg == WM_NCCREATE) {
-		auto userdata = reinterpret_cast<CREATESTRUCTW*>(lparam)->lpCreateParams;
-		// store window instance pointer in window user data
-		::SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(userdata));
-	}
+    if (auto window_ptr = reinterpret_cast<BorderlessWindow*>(::GetWindowLongPtrW(hwnd, GWLP_USERDATA))) {
+        auto& window = *window_ptr;
+        
+        switch (msg) {
+        case WM_NCCALCSIZE: {
+            if (wparam == TRUE && window.m_bBorderless) {
+                auto& params = *reinterpret_cast<NCCALCSIZE_PARAMS*>(lparam);
+                adjust_maximized_client_rect(hwnd, params.rgrc[0]);
+                return 0;
+            }
+            break;
+        }
 
-	if (auto window_ptr = reinterpret_cast<BorderlessWindow*>(::GetWindowLongPtrW(hwnd, GWLP_USERDATA))) {
-		auto& window = *window_ptr;
-		
-		switch (msg) {
-		case WM_NCCALCSIZE: {
-			if (wparam == TRUE && window.m_bBorderless) {
-				auto& params = *reinterpret_cast<NCCALCSIZE_PARAMS*>(lparam);
-				adjust_maximized_client_rect(hwnd, params.rgrc[0]);
-				return 0;
-			}
-			break;
-		}
+        case WM_NCHITTEST: {
+            // When we have no border or title bar, we need to perform our
+            // own hit testing to allow resizing and moving.
+            POINT cursor = POINT{
+                    GET_X_LPARAM(lparam),
+                    GET_Y_LPARAM(lparam)
+            };
+            
+            //::ScreenToClient(hwnd, &cursor);
+            if (window.m_bBorderless) {
+                return window.hit_test(cursor);
+            }
+            break;
+        }
+        case WM_NCACTIVATE: {
+            if (!is_composition_enabled()) {
+                // Prevents window frame reappearing on window activation
+                // in "basic" theme, where no aero shadow is present.
+                return 1;
+            }
+            break;
+        }
+        case WM_KEYDOWN:
+        case WM_SYSKEYDOWN: {
+            switch (wparam) {
+                case VK_F8: { window.m_bBorderless_drag = !window.m_bBorderless_drag;        return 0; }
+                case VK_F9: { window.m_bBorderless_resize = !window.m_bBorderless_resize;    return 0; }
+                case VK_F10: { window.set_borderless(!window.m_bBorderless);                 return 0; }
+                case VK_F11: { window.set_borderless_shadow(!window.m_bBorderless_shadow);   return 0; }
+            }
+            break;
+        }
+        case WM_SETFOCUS:
+            break;
 
-		case WM_NCHITTEST: {
-			// When we have no border or title bar, we need to perform our
-			// own hit testing to allow resizing and moving.
-			POINT cursor = POINT{
-					GET_X_LPARAM(lparam),
-					GET_Y_LPARAM(lparam)
-			};
-			
-			//::ScreenToClient(hwnd, &cursor);
-			if (window.m_bBorderless) {
-				return window.hit_test(cursor);
-			}
-			break;
-		}
-		case WM_NCACTIVATE: {
-			if (!is_composition_enabled()) {
-				// Prevents window frame reappearing on window activation
-				// in "basic" theme, where no aero shadow is present.
-				return 1;
-			}
-			break;
-		}
-		case WM_KEYDOWN:
-		case WM_SYSKEYDOWN: {
-			switch (wparam) {
-				case VK_F8: { window.m_bBorderless_drag = !window.m_bBorderless_drag;        return 0; }
-				case VK_F9: { window.m_bBorderless_resize = !window.m_bBorderless_resize;    return 0; }
-				case VK_F10: { window.set_borderless(!window.m_bBorderless);                 return 0; }
-				case VK_F11: { window.set_borderless_shadow(!window.m_bBorderless_shadow);   return 0; }
-			}
-			break;
-		}
-		case WM_SETFOCUS:
-			break;
+        case WM_KILLFOCUS:
+            break;
 
-		case WM_KILLFOCUS:
-			break;
+        case WM_SIZE:
+        {
+            if (wparam != SIZE_MINIMIZED)
+            {
+                window.m_uWidth = LOWORD(lparam);
+                window.m_uHeight = HIWORD(lparam);
+            }
 
-		case WM_SIZE:
-		{
-			if (wparam != SIZE_MINIMIZED)
-			{
-				window.m_uWidth = LOWORD(lparam);
-				window.m_uHeight = HIWORD(lparam);
-			}
+            return 0;
+        }
+        case WM_SIZING: 
+        {
+            if (wparam != SIZE_MINIMIZED)
+            {
+                window.m_uWidth = LOWORD(lparam);
+                window.m_uHeight = HIWORD(lparam);
+            }
 
-			return 0;
-		}
-		case WM_SIZING: 
-		{
-			if (wparam != SIZE_MINIMIZED)
-			{
-				window.m_uWidth = LOWORD(lparam);
-				window.m_uHeight = HIWORD(lparam);
-			}
+            auto it = s_BorderlessInstanceMap.find(hwnd);
+            if (it != s_BorderlessInstanceMap.end() && it->second) {
+                it->second->render_callback();
+            }
+        }
+        case WM_MOVE:
+        {
+            if (wparam != SIZE_MINIMIZED)
+            {
+                window.m_uWidth = LOWORD(lparam);
+                window.m_uHeight = HIWORD(lparam);
+            }
 
-			auto it = s_BorderlessInstanceMap.find(hwnd);
-			if (it != s_BorderlessInstanceMap.end() && it->second) {
-				it->second->render_callback();
-			}
-		}
-		case WM_MOVE:
-		{
-			if (wparam != SIZE_MINIMIZED)
-			{
-				window.m_uWidth = LOWORD(lparam);
-				window.m_uHeight = HIWORD(lparam);
-			}
+            auto it = s_BorderlessInstanceMap.find(hwnd);
+            if (it != s_BorderlessInstanceMap.end() && it->second) {
+                it->second->render_callback();
+            }
+        }
+        // https://gamedev.net/forums/topic/672094-keeping-things-moving-during-win32-moveresize-events/5254386/
+        case WM_NCLBUTTONDOWN:
+            if (SendMessage(hwnd, WM_NCHITTEST, wparam, lparam) == HTCAPTION) {
+                POINT point;
+                GetCursorPos(&point);
+                ScreenToClient(hwnd, &point);
+                PostMessage(hwnd, WM_MOUSEMOVE, 0, point.x | point.y << 16);
+            }
+            break;
+        case WM_ENTERSIZEMOVE: {
+            int n = SetTimer(hwnd, (UINT_PTR)&timer_id, USER_TIMER_MINIMUM, NULL);
+            auto it = s_BorderlessInstanceMap.find(hwnd);
+            if (it != s_BorderlessInstanceMap.end() && it->second) {
+                it->second->m_bIsInSizeMove = TRUE;
+            }
+            return 0;
+        }
+        case WM_EXITSIZEMOVE: {
+            auto it = s_BorderlessInstanceMap.find(hwnd);
+            if (it != s_BorderlessInstanceMap.end() && it->second) {
+                it->second->m_bIsInSizeMove = FALSE;
+            }
+            KillTimer(hwnd, (UINT_PTR)&timer_id);
+            return 0;
+        }
+        case WM_TIMER: {
+            auto it = s_BorderlessInstanceMap.find(hwnd);
+            if (it != s_BorderlessInstanceMap.end() && it->second) {
+                it->second->render_callback();
+            }
+            return 0;
+        }
+        case WM_DPICHANGED: {
+            std::cout << "hello" << std::endl;
+            //RECT *rect = (RECT *)lparam;
+            //::SetWindowPos(hwnd, NULL, rect->left, rect->top, rect->right - rect->left,
+            //               rect->bottom - rect->top, SWP_NOZORDER);
+            //UpdateUIScaling((float)LOWORD(wparam) / (float)USER_DEFAULT_SCREEN_DPI);
+            //return 0;
+            break;
+        }
 
-			auto it = s_BorderlessInstanceMap.find(hwnd);
-			if (it != s_BorderlessInstanceMap.end() && it->second) {
-				it->second->render_callback();
-			}
-		}
-		// https://gamedev.net/forums/topic/672094-keeping-things-moving-during-win32-moveresize-events/5254386/
-		case WM_NCLBUTTONDOWN:
-			if (SendMessage(hwnd, WM_NCHITTEST, wparam, lparam) == HTCAPTION) {
-				POINT point;
-				GetCursorPos(&point);
-				ScreenToClient(hwnd, &point);
-				PostMessage(hwnd, WM_MOUSEMOVE, 0, point.x | point.y << 16);
-			}
-			break;
-		case WM_ENTERSIZEMOVE: {
-			int n = SetTimer(hwnd, (UINT_PTR)&timer_id, USER_TIMER_MINIMUM, NULL);
-			auto it = s_BorderlessInstanceMap.find(hwnd);
-			if (it != s_BorderlessInstanceMap.end() && it->second) {
-				it->second->m_bIsInSizeMove = TRUE;
-			}
-			return 0;
-		}
-		case WM_EXITSIZEMOVE: {
-			auto it = s_BorderlessInstanceMap.find(hwnd);
-			if (it != s_BorderlessInstanceMap.end() && it->second) {
-				it->second->m_bIsInSizeMove = FALSE;
-			}
-			KillTimer(hwnd, (UINT_PTR)&timer_id);
-			return 0;
-		}
-		case WM_TIMER: {
-			auto it = s_BorderlessInstanceMap.find(hwnd);
-			if (it != s_BorderlessInstanceMap.end() && it->second) {
-				it->second->render_callback();
-			}
-			return 0;
-		}
+        case WM_SYSCOMMAND:
+            if ((wparam & 0xfff0) == SC_KEYMENU) // Disable ALT application menu
+                return 0;
 
-		case WM_SYSCOMMAND:
-			if ((wparam & 0xfff0) == SC_KEYMENU) // Disable ALT application menu
-				return 0;
+            break;
 
-			break;
+        case WM_DESTROY:
+            PostQuitMessage(0);
+            return 0;
+        }
+    }
 
-		case WM_DESTROY:
-			PostQuitMessage(0);
-			return 0;
-		}
-	}
+  
 
-	return ::DefWindowProcW(hwnd, msg, wparam, lparam);
+
+    return ::DefWindowProcW(hwnd, msg, wparam, lparam);
 }
 
 LRESULT BorderlessWindow::hit_test(POINT cursor)
 {
-	// identify borders and corners to allow resizing the window.
-	// Note: On Windows 10, windows behave differently and
-	// allow resizing outside the visible window frame.
-	// This implementation does not replicate that behavior.
+    // identify borders and corners to allow resizing the window.
+    // Note: On Windows 10, windows behave differently and
+    // allow resizing outside the visible window frame.
+    // This implementation does not replicate that behavior.
 
-	const POINT border{
-		::GetSystemMetrics(SM_CXFRAME) + ::GetSystemMetrics(SM_CXPADDEDBORDER),
-		::GetSystemMetrics(SM_CYFRAME) + ::GetSystemMetrics(SM_CXPADDEDBORDER)
-	};
+    const POINT border{
+        ::GetSystemMetrics(SM_CXFRAME) + ::GetSystemMetrics(SM_CXPADDEDBORDER),
+        ::GetSystemMetrics(SM_CYFRAME) + ::GetSystemMetrics(SM_CXPADDEDBORDER)
+    };
 
-	RECT window{};
-	if (!::GetWindowRect(m_hHWND.get(), &window)) return HTNOWHERE;
+    RECT window{};
+    if (!::GetWindowRect(m_hHWND.get(), &window)) return HTNOWHERE;
 
-	CONST UINT drag = m_bBorderless_drag ? HTCAPTION : HTCLIENT;
+    CONST UINT drag = m_bBorderless_drag ? HTCAPTION : HTCLIENT;
 
-	enum region_mask {
-		client = 0b0000,
-		left = 0b0001,
-		right = 0b0010,
-		top = 0b0100,
-		bottom = 0b1000,
-	};
+    enum region_mask {
+        client = 0b0000,
+        left = 0b0001,
+        right = 0b0010,
+        top = 0b0100,
+        bottom = 0b1000,
+    };
 
-	const auto result =
-		left * (cursor.x < (window.left + border.x)) |
-		right * (cursor.x >= (window.right - border.x)) |
-		top * (cursor.y < (window.top + border.y)) |
-		bottom * (cursor.y >= (window.bottom - border.y));
+    const auto result =
+        left * (cursor.x < (window.left + border.x)) |
+        right * (cursor.x >= (window.right - border.x)) |
+        top * (cursor.y < (window.top + border.y)) |
+        bottom * (cursor.y >= (window.bottom - border.y));
 
-	switch (result) {
-	case left: return m_bBorderless_resize ? HTLEFT : drag;
-	case right: return m_bBorderless_resize ? HTRIGHT : drag;
-	case top: return m_bBorderless_resize ? HTTOP : drag;
-	case bottom: return m_bBorderless_resize ? HTBOTTOM : drag;
-	case top | left: return m_bBorderless_resize ? HTTOPLEFT : drag;
-	case top | right: return m_bBorderless_resize ? HTTOPRIGHT : drag;
-	case bottom | left: return m_bBorderless_resize ? HTBOTTOMLEFT : drag;
-	case bottom | right: return m_bBorderless_resize ? HTBOTTOMRIGHT : drag;
-	case client:
-	{
-		for (RECT rect : m_vClientRects)
-		{
-			if (PtInRect(&rect, cursor) && (drag == HTCAPTION))
-			{
-				return HTCLIENT;
-			}
-		}
-		return drag;
-	}
-	default: return HTNOWHERE;
-	}
+    switch (result) {
+    case left: return m_bBorderless_resize ? HTLEFT : drag;
+    case right: return m_bBorderless_resize ? HTRIGHT : drag;
+    case top: return m_bBorderless_resize ? HTTOP : drag;
+    case bottom: return m_bBorderless_resize ? HTBOTTOM : drag;
+    case top | left: return m_bBorderless_resize ? HTTOPLEFT : drag;
+    case top | right: return m_bBorderless_resize ? HTTOPRIGHT : drag;
+    case bottom | left: return m_bBorderless_resize ? HTBOTTOMLEFT : drag;
+    case bottom | right: return m_bBorderless_resize ? HTBOTTOMRIGHT : drag;
+    case client:
+    {
+        for (RECT rect : m_vClientRects)
+        {
+            if (PtInRect(&rect, cursor) && (drag == HTCAPTION))
+            {
+                return HTCLIENT;
+            }
+        }
+        return drag;
+    }
+    default: return HTNOWHERE;
+    }
 }

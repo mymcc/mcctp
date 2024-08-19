@@ -7,18 +7,18 @@
 #include <deque>
 #include <atomic>
 #include <chrono>
-
+#include <thread>
 #include <windows.h>
 #include <psapi.h>
 #include <tchar.h>
 #include <mmsystem.h>
 #include <avrt.h>
-
+#include <dwmapi.h>
 #define STATUS_SUCCESS 0
 #define STATUS_TIMER_RESOLUTION_NOT_SET 0xC0000245
 extern "C" NTSYSAPI NTSTATUS NTAPI NtSetTimerResolution(ULONG DesiredResolution, BOOLEAN SetResolution, PULONG CurrentResolution);
 #pragma comment(lib, "ntdll.lib")
-
+#pragma comment(lib, "dwmapi.lib")
 // Data stored per platform window
 struct WGL_WindowData {
     HDC hDC;
