@@ -170,8 +170,6 @@ void Application::Run() {
     static float dt = 0.0f;
     float frame_time = 0.0f;
     static int desired_fr = 120;
-
-    static bool performance_mode = true;
     mcctp::utils::Timer clock;
     clock.Reset();
 
@@ -211,15 +209,12 @@ void Application::Run() {
             RenderAppFrame();
 
             int64_t COEFF{ -100'0 };
-            int64_t TIMEOUT{ 16'0 };
+            int64_t TIMEOUT{ 6'0 };
             LARGE_INTEGER dueTime;
-
+            desired_fr = 60;
             if (GetActiveWindow() == NULL) {
                 desired_fr = 10;
-                TIMEOUT = 9'00;
-            }
-            else {
-                desired_fr = 60;
+                TIMEOUT = 97'0;
             }
 
             dueTime.QuadPart = TIMEOUT * COEFF;
@@ -238,16 +233,8 @@ void Application::Run() {
                     __debugbreak();
                 }
             }
-            
-            // Frame-rate limiter
-            float desired_frame_time = (1000.0f / (desired_fr * 1000.0f));
+
             dt += clock.Elapsed();
-            if (performance_mode) {
-                mcctp::utils::Timer splt;
-                while (dt <= desired_frame_time) {
-                    dt += splt.Elapsed();
-                }
-            }
             frame_time = dt;
             dt = 0.0f;
             clock.Reset();
@@ -318,9 +305,9 @@ void Application::Init() {
         style.Colors[ImGuiCol_WindowBg].w = 1.0f;
     }
 
-    //DwmEnableMMCSS(TRUE);
+    DwmEnableMMCSS(TRUE);
     // Setup Platform/Renderer backends
-    
+    ImGui_ImplWin32_EnableAlphaCompositing(m_Window->m_hHWND.get());
     ImGui_ImplWin32_InitForOpenGL(m_Window->m_hHWND.get());
     ImGui_ImplOpenGL3_Init();
     float dpiscale = ImGui_ImplWin32_GetDpiScaleForHwnd(m_Window->m_hHWND.get());
@@ -392,6 +379,9 @@ void Application::RenderAppFrame() {
         }
         m_Window->set_client_area(WindowRects);
     }
+    // Blit
+    ::SwapBuffers(g_MainWindow.hDC);
+    ImGui_ImplWin32_EnableAlphaCompositing(m_Window->m_hHWND.get());
 
     // Update and Render additional Platform Windows
     if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
@@ -403,11 +393,7 @@ void Application::RenderAppFrame() {
         wglMakeCurrent(g_MainWindow.hDC, g_hRC);
     }
 
-    // Blit
-    ::SwapBuffers(g_MainWindow.hDC);
 
-    ImGui_ImplWin32_EnableAlphaCompositing(m_Window->m_hHWND.get());
-    //ImGui_ImplWin32_EnableDpiAwareness();
 }
 void Application::FixTimestep()
 {

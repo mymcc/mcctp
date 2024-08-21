@@ -180,8 +180,8 @@ VOID BorderlessWindow::set_borderless(BOOL enabled)
         // when switching between borderless and windowed, restore appropriate shadow state
         set_shadow(m_hHWND.get(), m_bBorderless_shadow && (new_style != Style::windowed));
 
-        // redraw frame
-        ::SetWindowPos(m_hHWND.get(), nullptr, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE);
+        // redraw frameSWP_NOMOVE
+        ::SetWindowPos(m_hHWND.get(), nullptr, -20000, -20000, 0, 0, SWP_FRAMECHANGED | SWP_NOSIZE);
         ::ShowWindow(m_hHWND.get(), SW_SHOW);
     }
 }
@@ -312,6 +312,7 @@ LRESULT BorderlessWindow::WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpa
             auto it = s_BorderlessInstanceMap.find(hwnd);
             if (it != s_BorderlessInstanceMap.end() && it->second) {
                 it->second->render_callback();
+
             }
         }
         case WM_MOVE:
@@ -326,6 +327,7 @@ LRESULT BorderlessWindow::WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpa
             if (it != s_BorderlessInstanceMap.end() && it->second) {
                 it->second->render_callback();
             }
+            break;
         }
         // https://gamedev.net/forums/topic/672094-keeping-things-moving-during-win32-moveresize-events/5254386/
         case WM_NCLBUTTONDOWN:
